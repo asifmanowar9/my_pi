@@ -39,8 +39,15 @@ dependencies:
   get: ^4.6.6
 
   # Firebase
+  firebase_core: ^2.24.2
   firebase_auth: ^4.19.6
   cloud_firestore: ^4.17.4
+
+  # Google Sign-In
+  google_sign_in: ^6.2.1
+
+  # Timezone for notifications
+  timezone: ^0.9.4
 
   # Local Database
   sqflite: ^2.3.3+1
@@ -50,6 +57,7 @@ dependencies:
 
   # Storage
   get_storage: ^2.1.1
+  path_provider: ^2.1.2
 
 dev_dependencies:
   flutter_test:

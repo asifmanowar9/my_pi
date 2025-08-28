@@ -1,122 +1,105 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:get/get.dart';
+import 'package:get_storage/get_storage.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-void main() {
+import 'firebase_options.dart';
+import 'core/routes.dart';
+import 'shared/themes/app_theme.dart';
+import 'shared/services/firebase_service.dart';
+import 'shared/services/notification_service.dart';
+import 'shared/services/storage_service.dart';
+import 'core/database/database_helper.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize GetStorage first
+  await GetStorage.init();
+
+  // Initialize Firebase with error handling
+  await _initializeFirebase();
+
+  // Initialize Services (but don't setup auth listener yet)
+  await _initializeServices();
+
   runApp(const MyApp());
+}
+
+Future<void> _initializeFirebase() async {
+  try {
+    // Check if Firebase is already initialized
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      debugPrint('Firebase initialized successfully');
+    } else {
+      debugPrint('Firebase already initialized');
+    }
+  } catch (e) {
+    debugPrint('Firebase initialization failed: $e');
+    // Continue without Firebase for development
+  }
+}
+
+Future<void> _initializeServices() async {
+  try {
+    // Register Services
+    Get.put(StorageService(), permanent: true);
+
+    // Only initialize Firebase service if Firebase is available
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        Get.put(FirebaseService(), permanent: true);
+      }
+    } catch (e) {
+      debugPrint('Firebase service not available: $e');
+    }
+
+    Get.put(NotificationService(), permanent: true);
+    Get.put(DatabaseHelper(), permanent: true);
+
+    // Initialize Theme Controller
+    Get.put(ThemeController(), permanent: true);
+
+    // Initialize Notification Service
+    await Get.find<NotificationService>().initialize();
+  } catch (e) {
+    debugPrint('Error initializing services: $e');
+  }
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+    return GetMaterialApp(
+      title: 'My Pi - Student Assistant',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: Get.find<ThemeController>().theme,
+      initialRoute: AppRoutes.initial,
+      getPages: AppRoutes.routes,
+      defaultTransition: Transition.cupertino,
+      transitionDuration: const Duration(milliseconds: 300),
+      onReady: () {
+        // Setup Firebase auth listener after GetMaterialApp is ready
+        _setupFirebaseAuthListener();
+      },
     );
   }
-}
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
-    );
+  void _setupFirebaseAuthListener() {
+    try {
+      if (Get.isRegistered<FirebaseService>()) {
+        Get.find<FirebaseService>().setupAuthListener();
+      }
+    } catch (e) {
+      debugPrint('Error setting up Firebase auth listener: $e');
+    }
   }
 }
