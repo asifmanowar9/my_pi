@@ -11,6 +11,8 @@ import 'shared/services/firebase_service.dart';
 import 'shared/services/notification_service.dart';
 import 'shared/services/storage_service.dart';
 import 'core/database/database_helper.dart';
+import 'features/auth/services/auth_service.dart';
+import 'features/auth/controllers/auth_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,6 +55,7 @@ Future<void> _initializeServices() async {
     try {
       if (Firebase.apps.isNotEmpty) {
         Get.put(FirebaseService(), permanent: true);
+        Get.put(AuthService(), permanent: true);
       }
     } catch (e) {
       debugPrint('Firebase service not available: $e');

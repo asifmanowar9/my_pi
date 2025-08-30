@@ -41,48 +41,53 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'your-web-api-key',
-    appId: '1:your-project-number:web:your-web-app-id',
-    messagingSenderId: 'your-messaging-sender-id',
-    projectId: 'my-pi-student-app',
-    authDomain: 'my-pi-student-app.firebaseapp.com',
-    storageBucket: 'my-pi-student-app.appspot.com',
-    measurementId: 'G-your-measurement-id',
+    apiKey: 'AIzaSyBtLSyqOKLC3gGGF_eUh8FXsTZBntSB3l0',
+    appId: '1:1040002483968:web:942e6af5b553fa09a095e5',
+    messagingSenderId: '1040002483968',
+    projectId: 'my-pi-9',
+    authDomain: 'my-pi-9.firebaseapp.com',
+    storageBucket: 'my-pi-9.firebasestorage.app',
+    measurementId: 'G-E2NHMN5JF3',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'your-android-api-key',
-    appId: '1:your-project-number:android:your-android-app-id',
-    messagingSenderId: 'your-messaging-sender-id',
-    projectId: 'my-pi-student-app',
-    storageBucket: 'my-pi-student-app.appspot.com',
+    apiKey: 'AIzaSyC0MjmUxlPjMAswqsNC0EUuCuJiyRZWRls',
+    appId: '1:1040002483968:android:76d8d03d0be9aadca095e5',
+    messagingSenderId: '1040002483968',
+    projectId: 'my-pi-9',
+    storageBucket: 'my-pi-9.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'your-ios-api-key',
-    appId: '1:your-project-number:ios:your-ios-app-id',
-    messagingSenderId: 'your-messaging-sender-id',
-    projectId: 'my-pi-student-app',
-    storageBucket: 'my-pi-student-app.appspot.com',
+    apiKey: 'AIzaSyAp2xivAm46gihJM2eMPnTFC5m6Ks6itM8',
+    appId: '1:1040002483968:ios:19c09bed8aa645e8a095e5',
+    messagingSenderId: '1040002483968',
+    projectId: 'my-pi-9',
+    storageBucket: 'my-pi-9.firebasestorage.app',
+    androidClientId: '1040002483968-0dd3qdc9ef5rd6140g8ipsve6o8c7ron.apps.googleusercontent.com',
+    iosClientId: '1040002483968-ll4g2mi7i8plsv8iaptc4te433b2n62m.apps.googleusercontent.com',
     iosBundleId: 'com.example.myPi',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'your-macos-api-key',
-    appId: '1:your-project-number:ios:your-macos-app-id',
-    messagingSenderId: 'your-messaging-sender-id',
-    projectId: 'my-pi-student-app',
-    storageBucket: 'my-pi-student-app.appspot.com',
+    apiKey: 'AIzaSyAp2xivAm46gihJM2eMPnTFC5m6Ks6itM8',
+    appId: '1:1040002483968:ios:19c09bed8aa645e8a095e5',
+    messagingSenderId: '1040002483968',
+    projectId: 'my-pi-9',
+    storageBucket: 'my-pi-9.firebasestorage.app',
+    androidClientId: '1040002483968-0dd3qdc9ef5rd6140g8ipsve6o8c7ron.apps.googleusercontent.com',
+    iosClientId: '1040002483968-ll4g2mi7i8plsv8iaptc4te433b2n62m.apps.googleusercontent.com',
     iosBundleId: 'com.example.myPi',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'your-windows-api-key',
-    appId: '1:your-project-number:web:your-windows-app-id',
-    messagingSenderId: 'your-messaging-sender-id',
-    projectId: 'my-pi-student-app',
-    authDomain: 'my-pi-student-app.firebaseapp.com',
-    storageBucket: 'my-pi-student-app.appspot.com',
-    measurementId: 'G-your-windows-measurement-id',
+    apiKey: 'AIzaSyBtLSyqOKLC3gGGF_eUh8FXsTZBntSB3l0',
+    appId: '1:1040002483968:web:e7af7bba43c7901da095e5',
+    messagingSenderId: '1040002483968',
+    projectId: 'my-pi-9',
+    authDomain: 'my-pi-9.firebaseapp.com',
+    storageBucket: 'my-pi-9.firebasestorage.app',
+    measurementId: 'G-52T2FW1W5B',
   );
+
 }
