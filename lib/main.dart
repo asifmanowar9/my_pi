@@ -10,7 +10,7 @@ import 'shared/themes/app_theme.dart';
 import 'shared/services/firebase_service.dart';
 import 'shared/services/notification_service.dart';
 import 'shared/services/storage_service.dart';
-import 'core/database/database_helper.dart';
+import 'core/database/database_helper_clean.dart';
 import 'features/auth/services/auth_service.dart';
 import 'features/auth/controllers/auth_controller.dart';
 
@@ -56,9 +56,13 @@ Future<void> _initializeServices() async {
       if (Firebase.apps.isNotEmpty) {
         Get.put(FirebaseService(), permanent: true);
         Get.put(AuthService(), permanent: true);
+        // Initialize AuthController early to prevent GetX errors
+        Get.put(AuthController(), permanent: true);
       }
     } catch (e) {
       debugPrint('Firebase service not available: $e');
+      // Initialize AuthController even if Firebase fails
+      Get.put(AuthController(), permanent: true);
     }
 
     Get.put(NotificationService(), permanent: true);

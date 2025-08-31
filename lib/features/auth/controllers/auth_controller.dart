@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 import '../../../core/routes.dart';
+import '../../../core/database/database_helper_clean.dart';
 
 class AuthController extends GetxController {
   static AuthController get instance => Get.find();
@@ -68,9 +69,14 @@ class AuthController extends GetxController {
     _authService.authStateChanges.listen((User? user) {
       _user.value = user;
       if (user != null) {
-        // 5. Remember login state with GetStorage
-        _storage.write('isLoggedIn', true);
-        _storage.write('userId', user.uid);
+        // Only set logged in if user is not in the process of signing out
+        if (!_isSigningOut.value) {
+          // Save user data to local database
+          _saveUserToDatabase(user);
+          // 5. Remember login state with GetStorage
+          _storage.write('isLoggedIn', true);
+          _storage.write('userId', user.uid);
+        }
       } else {
         _storage.write('isLoggedIn', false);
         _storage.remove('userId');
@@ -81,6 +87,28 @@ class AuthController extends GetxController {
     final wasLoggedIn = _storage.read('isLoggedIn') ?? false;
     if (wasLoggedIn && _authService.currentFirebaseUser != null) {
       _user.value = _authService.currentFirebaseUser;
+      // Also save to database if user was already logged in
+      if (_user.value != null) {
+        _saveUserToDatabase(_user.value!);
+      }
+    }
+  }
+
+  // Save user data to local SQLite database
+  Future<void> _saveUserToDatabase(User firebaseUser) async {
+    try {
+      final dbHelper = DatabaseHelper();
+      final userData = {
+        'id': firebaseUser.uid,
+        'email': firebaseUser.email ?? '',
+        'name': firebaseUser.displayName ?? 'User',
+        'profile_picture': firebaseUser.photoURL,
+      };
+
+      await dbHelper.insertOrUpdateUser(userData);
+      print('✅ User saved to local database: ${firebaseUser.email}');
+    } catch (e) {
+      print('❌ Error saving user to database: $e');
     }
   }
 
@@ -178,16 +206,23 @@ class AuthController extends GetxController {
     _clearError();
 
     try {
-      await _authService.signOut();
+      // Clear user state first
+      _user.value = null;
 
       // Clear stored login state
       _storage.write('isLoggedIn', false);
       _storage.remove('userId');
 
+      // Clear any guest state as well
+      _storage.write('isGuest', false);
+
+      // Sign out from Firebase Auth (this will trigger the auth state listener)
+      await _authService.signOut();
+
       // Clear form data
       _clearForms();
 
-      // 7. Navigation handling after authentication
+      // Force navigation to login and clear all previous routes
       Get.offAllNamed(Routes.LOGIN);
 
       _showSuccessMessage('Signed out successfully');

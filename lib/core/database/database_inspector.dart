@@ -1,6 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:flutter/foundation.dart';
-import '../database/database_helper.dart';
+import 'database_helper.dart';
 
 class DatabaseInspector {
   static final DatabaseInspector _instance = DatabaseInspector._internal();

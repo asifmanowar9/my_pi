@@ -8,8 +8,10 @@ import '../features/auth/pages/register_page.dart';
 import '../features/auth/pages/welcome_page.dart';
 import '../features/auth/pages/forgot_password_page.dart';
 import '../features/auth/controllers/auth_controller.dart';
+import '../features/auth/services/auth_service.dart';
 import '../features/debug/pages/database_viewer_page.dart';
-// import '../features/courses/pages/courses_page.dart';
+import '../features/courses/pages/courses_page.dart';
+import '../features/courses/pages/course_detail_page.dart';
 // import '../features/assignments/pages/assignments_page.dart';
 // import '../features/grades/pages/grades_page.dart';
 
@@ -83,7 +85,16 @@ class AppRoutes {
     ),
     GetPage(
       name: Routes.COURSE_DETAIL,
-      page: () => const CourseDetailPage(),
+      page: () {
+        // Get course from arguments
+        final course = Get.arguments;
+        if (course != null) {
+          return CourseDetailPage(course: course);
+        }
+        // Fallback - navigate back to courses
+        Get.offNamed(Routes.COURSES);
+        return const CoursesPage();
+      },
       transition: Transition.rightToLeft,
     ),
     GetPage(
@@ -135,10 +146,8 @@ class _SplashPageState extends State<SplashPage> {
     await Future.delayed(const Duration(seconds: 2));
 
     try {
-      // Initialize AuthController first to restore auth state (singleton)
-      Get.put(AuthController(), permanent: true);
-
-      // Wait a bit more for Firebase Auth to restore state
+      // AuthController should already be initialized in main.dart
+      // Just wait a bit more for Firebase Auth to restore state
       await Future.delayed(const Duration(milliseconds: 500));
 
       // Check if auth service is available
@@ -154,15 +163,33 @@ class _SplashPageState extends State<SplashPage> {
           // Show welcome page for first-time users
           Get.offNamed(Routes.WELCOME);
         } else {
-          // Check authentication state from AuthController (which syncs with Firebase)
+          // Check authentication state from both storage and Firebase
           final isLoggedIn = storageService.read('isLoggedIn') ?? false;
           final isGuest = storageService.read('isGuest') ?? false;
 
-          if (isLoggedIn || isGuest) {
-            // User is authenticated or in guest mode
+          // Double-check with Firebase Auth state if available
+          bool firebaseAuthenticated = false;
+          try {
+            if (Get.isRegistered<AuthService>()) {
+              final authService = Get.find<AuthService>();
+              firebaseAuthenticated = authService.isAuthenticated;
+            }
+          } catch (e) {
+            debugPrint('Error checking Firebase auth: $e');
+          }
+
+          // Only consider user logged in if both local storage AND Firebase agree
+          // This prevents auto-login after logout
+          if ((isLoggedIn && firebaseAuthenticated) || isGuest) {
+            // User is properly authenticated or in guest mode
             Get.offNamed(Routes.HOME);
           } else {
-            // User is not authenticated
+            // User is not properly authenticated, clear any stale state
+            if (isLoggedIn && !firebaseAuthenticated) {
+              // Clear stale local state
+              storageService.write('isLoggedIn', false);
+              storageService.remove('userId');
+            }
             Get.offNamed(Routes.LOGIN);
           }
         }
@@ -390,11 +417,7 @@ class HomePage extends StatelessWidget {
                     subtitle: 'View your courses',
                     color: Colors.blue,
                     onTap: () {
-                      Get.snackbar(
-                        'Coming Soon',
-                        'Courses feature will be available soon!',
-                        snackPosition: SnackPosition.BOTTOM,
-                      );
+                      Get.toNamed(Routes.COURSES);
                     },
                   ),
                   _buildFeatureCard(
@@ -604,30 +627,6 @@ class HomePage extends StatelessWidget {
     } catch (e) {
       Get.offAllNamed(Routes.REGISTER);
     }
-  }
-}
-
-class CoursesPage extends StatelessWidget {
-  const CoursesPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Courses')),
-      body: const Center(child: Text('Courses Page - To be implemented')),
-    );
-  }
-}
-
-class CourseDetailPage extends StatelessWidget {
-  const CourseDetailPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Course Detail')),
-      body: const Center(child: Text('Course Detail Page - To be implemented')),
-    );
   }
 }
 

@@ -4,6 +4,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:get/get.dart';
 import 'package:flutter/foundation.dart';
 import '../../core/base_service.dart';
+import 'storage_service.dart';
 
 class FirebaseService extends BaseService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -29,17 +30,37 @@ class FirebaseService extends BaseService {
         firebaseUser.value = user;
         isLoggedIn.value = user != null;
 
+        // Check local storage for logout state to avoid auto-login after logout
+        final storage = Get.find<StorageService>();
+        final localLoggedIn = storage.read('isLoggedIn') ?? false;
+
         if (user == null) {
           debugPrint('User signed out');
+          // Ensure local state is also cleared
+          storage.write('isLoggedIn', false);
+          storage.remove('userId');
+
           // Only navigate if we're not already on the login page
-          if (Get.currentRoute != '/login') {
+          if (Get.currentRoute != '/login' && Get.currentRoute != '/welcome') {
             Get.offAllNamed('/login');
           }
         } else {
           debugPrint('User signed in: ${user.email}');
-          // Only navigate if we're not already on the home page
-          if (Get.currentRoute != '/home') {
-            Get.offAllNamed('/home');
+
+          // Only proceed with auto-login if local storage also says user is logged in
+          // This prevents auto-login after an explicit logout
+          if (localLoggedIn) {
+            // Only navigate if we're not already on the home page
+            if (Get.currentRoute != '/home' && Get.currentRoute != '/') {
+              Get.offAllNamed('/home');
+            }
+          } else {
+            // User is authenticated in Firebase but not locally logged in
+            // This means they logged out explicitly, so sign them out from Firebase too
+            debugPrint(
+              'Firebase user exists but local logout detected, signing out...',
+            );
+            _auth.signOut();
           }
         }
       });
