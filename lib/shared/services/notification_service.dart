@@ -121,11 +121,11 @@ class NotificationService extends GetxService {
             Get.toNamed('/course-detail', arguments: {'id': id});
             break;
           default:
-            Get.toNamed('/home');
+            Get.toNamed('/main');
         }
       }
     } catch (e) {
-      Get.toNamed('/home');
+      Get.toNamed('/main');
     }
   }
 

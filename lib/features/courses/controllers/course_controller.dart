@@ -8,7 +8,7 @@ import '../../../shared/services/storage_service.dart';
 class CourseController extends GetxController {
   static CourseController get instance => Get.find();
 
-  final CourseService _courseService = CourseService();
+  final CourseService _courseService = Get.find<CourseService>();
 
   // Safe AuthController getter
   AuthController? get _safeAuthController {
@@ -49,6 +49,12 @@ class CourseController extends GetxController {
   final TextEditingController scheduleController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
   final TextEditingController creditsController = TextEditingController();
+  final TextEditingController durationController = TextEditingController();
+
+  // Date selection for course duration
+  final Rx<DateTime?> _startDate = Rx<DateTime?>(null);
+  DateTime? get startDate => _startDate.value;
+  void setStartDate(DateTime? date) => _startDate.value = date;
 
   // Color selection
   final Rx<Color?> _selectedColor = Rx<Color?>(null);
@@ -128,6 +134,10 @@ class CourseController extends GetxController {
     try {
       _isLoading.value = true;
       final courseList = await _courseService.getAllCourses();
+
+      // Update course statuses based on end dates
+      await _updateCourseStatuses(courseList);
+
       _courses.value = courseList;
       _applyFilters();
       _updateUniqueValues();
@@ -135,6 +145,46 @@ class CourseController extends GetxController {
       _showErrorSnackbar('Failed to load courses', e.toString());
     } finally {
       _isLoading.value = false;
+    }
+  }
+
+  // Automatically update course statuses based on end dates
+  Future<void> _updateCourseStatuses(List<CourseModel> courses) async {
+    final now = DateTime.now();
+    bool needsUpdate = false;
+
+    for (var course in courses) {
+      if (course.endDate == null) continue;
+
+      String newStatus;
+      if (course.startDate != null && now.isBefore(course.startDate!)) {
+        newStatus = 'upcoming';
+      } else if (now.isAfter(course.endDate!)) {
+        newStatus = 'completed';
+      } else {
+        newStatus = 'active';
+      }
+
+      // Only update if status has changed
+      if (course.status != newStatus) {
+        needsUpdate = true;
+        final updatedCourse = course.copyWith(
+          status: newStatus,
+          updatedAt: DateTime.now(),
+        );
+        try {
+          await _courseService.updateCourse(updatedCourse);
+        } catch (e) {
+          print('Error updating course status: $e');
+        }
+      }
+    }
+
+    // Reload courses if any status was updated
+    if (needsUpdate) {
+      final updatedList = await _courseService.getAllCourses();
+      courses.clear();
+      courses.addAll(updatedList);
     }
   }
 
@@ -367,6 +417,8 @@ class CourseController extends GetxController {
     scheduleController.text = course.schedule;
     descriptionController.text = course.description ?? '';
     creditsController.text = course.credits.toString();
+    durationController.text = course.durationMonths?.toString() ?? '';
+    _startDate.value = course.startDate;
 
     // Set the color if available
     if (course.color != null && course.color!.isNotEmpty) {
@@ -397,12 +449,44 @@ class CourseController extends GetxController {
     scheduleController.clear();
     descriptionController.clear();
     creditsController.text = '3';
+    durationController.clear();
+    _startDate.value = null;
     _selectedColor.value = null;
     formKey.currentState?.reset();
   }
 
   void setSelectedColor(Color? color) {
     _selectedColor.value = color;
+  }
+
+  // Material 3 compliant color palette for courses
+  List<Color> get materialYouColors {
+    final theme = Get.theme;
+    return [
+      theme.colorScheme.primary,
+      theme.colorScheme.secondary,
+      theme.colorScheme.tertiary,
+      theme.colorScheme.primaryContainer,
+      theme.colorScheme.secondaryContainer,
+      theme.colorScheme.tertiaryContainer,
+      // Additional Material 3 compliant colors
+      Colors.red.shade400,
+      Colors.pink.shade400,
+      Colors.purple.shade400,
+      Colors.deepPurple.shade400,
+      Colors.indigo.shade400,
+      Colors.blue.shade400,
+      Colors.lightBlue.shade400,
+      Colors.cyan.shade400,
+      Colors.teal.shade400,
+      Colors.green.shade400,
+      Colors.lightGreen.shade400,
+      Colors.lime.shade400,
+      Colors.yellow.shade400,
+      Colors.amber.shade400,
+      Colors.orange.shade400,
+      Colors.deepOrange.shade400,
+    ];
   }
 
   // Cloud synchronization - Requirement 6: Optional cloud sync management
@@ -699,13 +783,30 @@ class CourseController extends GetxController {
   }
 
   CourseModel _buildCourseFromForm({String? baseId}) {
+    // Generate a unique code if not provided to avoid database NOT NULL constraint
+    final courseCode = codeController.text.trim().isEmpty
+        ? 'AUTO_${DateTime.now().millisecondsSinceEpoch}'
+        : codeController.text.trim();
+
+    // Calculate end date if start date and duration are provided
+    DateTime? endDate;
+    int? durationMonths;
+    if (durationController.text.trim().isNotEmpty) {
+      durationMonths = int.tryParse(durationController.text.trim());
+      if (durationMonths != null && _startDate.value != null) {
+        endDate = DateTime(
+          _startDate.value!.year,
+          _startDate.value!.month + durationMonths,
+          _startDate.value!.day,
+        );
+      }
+    }
+
     return CourseModel(
       id: baseId ?? _courseService.generateCourseId(),
       userId: _safeAuthController?.user?.uid ?? '',
       name: nameController.text.trim(),
-      code: codeController.text.trim().isEmpty
-          ? null
-          : codeController.text.trim(),
+      code: courseCode,
       teacherName: teacherController.text.trim(),
       classroom: classroomController.text.trim(),
       schedule: scheduleController.text.trim(),
@@ -720,6 +821,9 @@ class CourseController extends GetxController {
           ? _selectedCourse.value!.createdAt
           : DateTime.now(),
       updatedAt: DateTime.now(),
+      startDate: _startDate.value,
+      endDate: endDate,
+      durationMonths: durationMonths,
     );
   }
 
@@ -759,6 +863,11 @@ class CourseController extends GetxController {
   Future<bool> _showDeleteConfirmation() async {
     final result = await Get.dialog<bool>(
       AlertDialog(
+        icon: Icon(
+          Icons.delete_outline,
+          color: Get.theme.colorScheme.error,
+          size: 28,
+        ),
         title: const Text('Delete Course'),
         content: const Text(
           'Are you sure you want to delete this course? This action cannot be undone.',
@@ -768,9 +877,12 @@ class CourseController extends GetxController {
             onPressed: () => Get.back(result: false),
             child: const Text('Cancel'),
           ),
-          TextButton(
+          FilledButton(
             onPressed: () => Get.back(result: true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: Get.theme.colorScheme.error,
+              foregroundColor: Get.theme.colorScheme.onError,
+            ),
             child: const Text('Delete'),
           ),
         ],
@@ -787,11 +899,15 @@ class CourseController extends GetxController {
       'Success',
       message,
       snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: Colors.green.shade100,
-      colorText: Colors.green.shade800,
+      backgroundColor: Get.theme.colorScheme.primaryContainer,
+      colorText: Get.theme.colorScheme.onPrimaryContainer,
       duration: const Duration(seconds: 3),
       margin: const EdgeInsets.all(16),
-      borderRadius: 8,
+      borderRadius: 12, // More Material 3 compliant radius
+      icon: Icon(
+        Icons.check_circle_outline,
+        color: Get.theme.colorScheme.onPrimaryContainer,
+      ),
     );
   }
 
@@ -803,11 +919,15 @@ class CourseController extends GetxController {
       title,
       message,
       snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: Colors.red.shade100,
-      colorText: Colors.red.shade800,
+      backgroundColor: Get.theme.colorScheme.errorContainer,
+      colorText: Get.theme.colorScheme.onErrorContainer,
       duration: const Duration(seconds: 4),
       margin: const EdgeInsets.all(16),
-      borderRadius: 8,
+      borderRadius: 12, // More Material 3 compliant radius
+      icon: Icon(
+        Icons.error_outline,
+        color: Get.theme.colorScheme.onErrorContainer,
+      ),
     );
   }
 

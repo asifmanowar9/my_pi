@@ -9,7 +9,7 @@ class DatabaseHelper {
 
   DatabaseHelper._internal();
 
-  static const int _currentVersion = 6;
+  static const int _currentVersion = 7;
   static const String _databaseName = 'my_pi.db';
 
   Future<Database> get database async {
@@ -65,6 +65,11 @@ class DatabaseHelper {
       await _addCoursesTableColumns(db);
     }
 
+    if (oldVersion < 7) {
+      // Add course_assignments table for assignment grading system
+      await _createCourseAssignmentsTable(db);
+    }
+
     if (oldVersion < 3) {
       // Re-run courses table schema upgrade to ensure all columns exist
       await _addCoursesTableColumns(db);
@@ -95,7 +100,11 @@ class DatabaseHelper {
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
           is_synced INTEGER NOT NULL DEFAULT 0,
-          last_sync_at TEXT
+          last_sync_at TEXT,
+          start_date TEXT,
+          end_date TEXT,
+          duration_months INTEGER,
+          status TEXT NOT NULL DEFAULT 'active'
         )
       ''');
       print('✅ Courses table created successfully');
@@ -126,6 +135,10 @@ class DatabaseHelper {
       'updated_at': 'TEXT NOT NULL',
       'is_synced': 'INTEGER NOT NULL DEFAULT 0',
       'last_sync_at': 'TEXT',
+      'start_date': 'TEXT',
+      'end_date': 'TEXT',
+      'duration_months': 'INTEGER',
+      'status': 'TEXT NOT NULL DEFAULT "active"',
     };
 
     for (final entry in columnsToAdd.entries) {
@@ -145,6 +158,41 @@ class DatabaseHelper {
       }
     }
     print('✅ Courses table schema upgrade completed');
+  }
+
+  Future<void> _createCourseAssignmentsTable(Database db) async {
+    print('🔄 Creating course_assignments table...');
+
+    // Check if table already exists
+    final List<Map<String, dynamic>> tables = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='course_assignments'",
+    );
+
+    if (tables.isNotEmpty) {
+      print('ℹ️ course_assignments table already exists');
+      return;
+    }
+
+    try {
+      await db.execute('''
+        CREATE TABLE course_assignments (
+          id TEXT PRIMARY KEY,
+          course_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT,
+          due_date TEXT,
+          is_completed INTEGER NOT NULL DEFAULT 0,
+          grade REAL,
+          max_grade REAL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (course_id) REFERENCES courses (id) ON DELETE CASCADE
+        )
+      ''');
+      print('✅ course_assignments table created successfully');
+    } catch (e) {
+      print('❌ Failed to create course_assignments table: $e');
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -223,6 +271,23 @@ class DatabaseHelper {
         last_sync_at TEXT,
         FOREIGN KEY (course_id) REFERENCES courses (id) ON DELETE CASCADE,
         FOREIGN KEY (assignment_id) REFERENCES assignments (id) ON DELETE SET NULL
+      )
+    ''');
+
+    // Create course_assignments table for course-specific assignments with grades
+    await db.execute('''
+      CREATE TABLE course_assignments (
+        id TEXT PRIMARY KEY,
+        course_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        due_date TEXT,
+        is_completed INTEGER NOT NULL DEFAULT 0,
+        grade REAL,
+        max_grade REAL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (course_id) REFERENCES courses (id) ON DELETE CASCADE
       )
     ''');
   }
@@ -385,6 +450,70 @@ class DatabaseHelper {
       'created_at': DateTime.now().toIso8601String(),
       'updated_at': DateTime.now().toIso8601String(),
     });
+  }
+
+  // Course Assignments CRUD Methods
+  Future<int> insertCourseAssignment(Map<String, dynamic> assignment) async {
+    final db = await database;
+    return await db.insert('course_assignments', assignment);
+  }
+
+  Future<List<Map<String, dynamic>>> getCourseAssignments(
+    String courseId,
+  ) async {
+    final db = await database;
+    return await db.query(
+      'course_assignments',
+      where: 'course_id = ?',
+      whereArgs: [courseId],
+      orderBy: 'due_date ASC, created_at DESC',
+    );
+  }
+
+  Future<Map<String, dynamic>?> getCourseAssignmentById(String id) async {
+    final db = await database;
+    final result = await db.query(
+      'course_assignments',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    return result.isNotEmpty ? result.first : null;
+  }
+
+  Future<int> updateCourseAssignment(
+    String id,
+    Map<String, dynamic> assignment,
+  ) async {
+    final db = await database;
+    return await db.update(
+      'course_assignments',
+      assignment,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<int> deleteCourseAssignment(String id) async {
+    final db = await database;
+    return await db.delete(
+      'course_assignments',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<int> deleteCourseAssignmentsByCourseId(String courseId) async {
+    final db = await database;
+    return await db.delete(
+      'course_assignments',
+      where: 'course_id = ?',
+      whereArgs: [courseId],
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getAllCourseAssignments() async {
+    final db = await database;
+    return await db.query('course_assignments');
   }
 
   Future<void> close() async {

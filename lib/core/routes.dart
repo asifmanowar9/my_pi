@@ -163,11 +163,35 @@ class _SplashPageState extends State<SplashPage> {
           // Show welcome page for first-time users
           Get.offNamed(Routes.WELCOME);
         } else {
-          // Check authentication state from both storage and Firebase
+          // Check authentication state from local storage first
           final isLoggedIn = storageService.read('isLoggedIn') ?? false;
           final isGuest = storageService.read('isGuest') ?? false;
+          final hasExplicitlyLoggedOut =
+              storageService.read('hasLoggedOut') ?? false;
 
-          // Double-check with Firebase Auth state if available
+          // If user has explicitly logged out, ignore Firebase state and go to login
+          if (hasExplicitlyLoggedOut) {
+            // Clear the logout flag and ensure clean state
+            storageService.write('hasLoggedOut', false);
+            storageService.write('isLoggedIn', false);
+            storageService.write('isGuest', false);
+            storageService.remove('userId');
+
+            // Force Firebase signout to be sure
+            try {
+              if (Get.isRegistered<AuthService>()) {
+                final authService = Get.find<AuthService>();
+                await authService.signOut();
+              }
+            } catch (e) {
+              debugPrint('Error during forced signout: $e');
+            }
+
+            Get.offNamed(Routes.LOGIN);
+            return;
+          }
+
+          // Check Firebase Auth state only if no explicit logout occurred
           bool firebaseAuthenticated = false;
           try {
             if (Get.isRegistered<AuthService>()) {
@@ -515,37 +539,45 @@ class HomePage extends StatelessWidget {
         actions: [
           TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Get.back();
               try {
-                if (Get.isRegistered<StorageService>()) {
-                  final storageService = Get.find<StorageService>();
-                  bool isGuest = storageService.read('isGuest') ?? false;
-                  bool hasSeenWelcome =
-                      storageService.read('hasSeenWelcome') ?? false;
-
-                  // Clear all authentication data (use same keys as AuthController)
-                  storageService.write('isLoggedIn', false);
-                  storageService.write('isGuest', false);
-                  storageService.remove('user');
-                  storageService.remove('userId');
-
-                  // Navigate based on whether user has seen welcome page
-                  String targetRoute = hasSeenWelcome
-                      ? Routes.LOGIN
-                      : Routes.WELCOME;
-                  Get.offAllNamed(targetRoute);
-
-                  // Show appropriate message
-                  Get.snackbar(
-                    'Success',
-                    isGuest
-                        ? 'Guest session ended'
-                        : 'You have been logged out successfully',
-                    snackPosition: SnackPosition.BOTTOM,
-                  );
+                // Use AuthController's signOut method for proper logout
+                if (Get.isRegistered<AuthController>()) {
+                  final authController = Get.find<AuthController>();
+                  await authController.signOut();
                 } else {
-                  Get.offAllNamed(Routes.LOGIN);
+                  // Fallback to manual logout if AuthController not available
+                  if (Get.isRegistered<StorageService>()) {
+                    final storageService = Get.find<StorageService>();
+                    bool isGuest = storageService.read('isGuest') ?? false;
+                    bool hasSeenWelcome =
+                        storageService.read('hasSeenWelcome') ?? false;
+
+                    // Clear all authentication data and set logout flag
+                    storageService.write('hasLoggedOut', true);
+                    storageService.write('isLoggedIn', false);
+                    storageService.write('isGuest', false);
+                    storageService.remove('user');
+                    storageService.remove('userId');
+
+                    // Navigate based on whether user has seen welcome page
+                    String targetRoute = hasSeenWelcome
+                        ? Routes.LOGIN
+                        : Routes.WELCOME;
+                    Get.offAllNamed(targetRoute);
+
+                    // Show appropriate message
+                    Get.snackbar(
+                      'Success',
+                      isGuest
+                          ? 'Guest session ended'
+                          : 'You have been logged out successfully',
+                      snackPosition: SnackPosition.BOTTOM,
+                    );
+                  } else {
+                    Get.offAllNamed(Routes.LOGIN);
+                  }
                 }
               } catch (e) {
                 Get.offAllNamed(Routes.LOGIN);

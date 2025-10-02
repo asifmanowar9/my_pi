@@ -61,6 +61,7 @@ dependencies:
   # Storage
   get_storage: ^2.1.1
   path_provider: ^2.1.2
+  uuid: ^4.5.1
 
 dev_dependencies:
   flutter_test:

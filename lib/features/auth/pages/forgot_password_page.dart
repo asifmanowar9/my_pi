@@ -7,7 +7,7 @@ class ForgotPasswordPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final authController = Get.put(AuthController());
+    final authController = Get.find<AuthController>();
     final size = MediaQuery.of(context).size;
     final isTablet = size.width > 600;
 

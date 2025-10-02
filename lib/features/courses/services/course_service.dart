@@ -1,19 +1,41 @@
+import 'dart:convert';
+import 'package:get/get.dart';
+
 import '../../../core/database/database_helper_clean.dart';
 import '../../../shared/services/cloud_database_service.dart';
 import '../../../features/auth/controllers/auth_controller.dart';
 import '../models/course_model.dart';
-import 'package:get/get.dart';
-import 'dart:convert';
-import 'dart:io';
 
-class CourseService {
-  static final CourseService _instance = CourseService._internal();
-  factory CourseService() => _instance;
-  CourseService._internal();
-
-  final DatabaseHelper _localDb = DatabaseHelper();
-  final CloudDatabaseService _cloudDb = CloudDatabaseService();
+/// CourseService - Comprehensive service for course management in My Pi app
+/// Features:
+/// 1. Business logic for course management
+/// 2. Local database operations using DatabaseHelper
+/// 3. Optional cloud backup using CloudDatabaseService
+/// 4. Data validation and business rules
+/// 5. Search and filter functionality
+/// 6. Import/export functionality for course data
+/// 7. Statistics calculation for dashboard
+/// 8. Conflict resolution for sync operations
+class CourseService extends GetxService {
+  final DatabaseHelper _databaseHelper = Get.find<DatabaseHelper>();
+  CloudDatabaseService? _cloudService;
   AuthController? _authController;
+
+  @override
+  void onInit() {
+    super.onInit();
+    _initializeCloudService();
+  }
+
+  void _initializeCloudService() {
+    try {
+      if (Get.isRegistered<CloudDatabaseService>()) {
+        _cloudService = Get.find<CloudDatabaseService>();
+      }
+    } catch (e) {
+      print('Cloud service not available: $e');
+    }
+  }
 
   // Helper method to get AuthController safely
   AuthController? get _safeAuthController {
@@ -30,19 +52,32 @@ class CourseService {
   // Helper method to get current user ID
   String get _currentUserId => _safeAuthController?.user?.uid ?? '';
 
-  // Local CRUD operations
+  // CRUD Operations with DatabaseHelper
 
+  /// Creates a new course in the local database and optionally backs it up to cloud
   Future<String> createCourse(CourseModel course) async {
     try {
-      final db = await _localDb.database;
-      final courseData = course.toJson();
+      // Validate course data
+      final validationErrors = validateCourseData(course);
+      if (validationErrors.isNotEmpty) {
+        throw Exception('Validation failed: ${validationErrors.join(', ')}');
+      }
 
+      // Check business rules
+      final isValid = await validateBusinessRules(course);
+      if (!isValid) {
+        throw Exception('Course name or code already exists');
+      }
+
+      final db = await _databaseHelper.database;
+      final courseData = course.toJson();
       await db.insert('courses', courseData);
 
       // Optional cloud backup for authenticated users
-      if (_safeAuthController?.isAuthenticated == true) {
+      if (_safeAuthController?.isAuthenticated == true &&
+          _cloudService != null) {
         try {
-          await _cloudDb.createCourse(courseData);
+          await _cloudService!.createCourse(courseData);
           // Update local record to mark as synced
           await db.update(
             'courses',
@@ -62,9 +97,10 @@ class CourseService {
     }
   }
 
+  /// Retrieves all courses for the current user
   Future<List<CourseModel>> getAllCourses() async {
     try {
-      final db = await _localDb.database;
+      final db = await _databaseHelper.database;
       final userId = _currentUserId;
 
       final List<Map<String, dynamic>> maps = await db.query(
@@ -80,9 +116,10 @@ class CourseService {
     }
   }
 
+  /// Retrieves a specific course by ID
   Future<CourseModel?> getCourseById(String id) async {
     try {
-      final db = await _localDb.database;
+      final db = await _databaseHelper.database;
       final userId = _currentUserId;
 
       final List<Map<String, dynamic>> maps = await db.query(
@@ -100,9 +137,22 @@ class CourseService {
     }
   }
 
+  /// Updates an existing course
   Future<void> updateCourse(CourseModel course) async {
     try {
-      final db = await _localDb.database;
+      // Validate course data
+      final validationErrors = validateCourseData(course);
+      if (validationErrors.isNotEmpty) {
+        throw Exception('Validation failed: ${validationErrors.join(', ')}');
+      }
+
+      // Check business rules
+      final isValid = await validateBusinessRules(course, isUpdate: true);
+      if (!isValid) {
+        throw Exception('Course name or code already exists');
+      }
+
+      final db = await _databaseHelper.database;
       final userId = _currentUserId;
       final courseData = course
           .copyWith(updatedAt: DateTime.now(), isSynced: false)
@@ -116,9 +166,10 @@ class CourseService {
       );
 
       // Optional cloud backup for authenticated users
-      if (_safeAuthController?.isAuthenticated == true) {
+      if (_safeAuthController?.isAuthenticated == true &&
+          _cloudService != null) {
         try {
-          await _cloudDb.updateCourse(course.id, courseData);
+          await _cloudService!.updateCourse(course.id, courseData);
           // Update local record to mark as synced
           await db.update(
             'courses',
@@ -136,9 +187,10 @@ class CourseService {
     }
   }
 
+  /// Deletes a course
   Future<void> deleteCourse(String id) async {
     try {
-      final db = await _localDb.database;
+      final db = await _databaseHelper.database;
       final userId = _currentUserId;
 
       await db.delete(
@@ -148,9 +200,10 @@ class CourseService {
       );
 
       // Optional cloud deletion for authenticated users
-      if (_safeAuthController?.isAuthenticated == true) {
+      if (_safeAuthController?.isAuthenticated == true &&
+          _cloudService != null) {
         try {
-          await _cloudDb.deleteCourse(id);
+          await _cloudService!.deleteCourse(id);
         } catch (e) {
           print('Cloud deletion failed: $e');
           // Continue without cloud deletion
@@ -161,16 +214,26 @@ class CourseService {
     }
   }
 
-  // Search and filter operations
+  // Search and Filter Functionality
 
+  /// Searches courses by name, teacher, or classroom
   Future<List<CourseModel>> searchCourses(String query) async {
     try {
-      final db = await _localDb.database;
+      if (query.trim().isEmpty) {
+        return await getAllCourses();
+      }
+
+      final db = await _databaseHelper.database;
       final userId = _currentUserId;
 
       String whereClause =
-          'name LIKE ? OR teacher_name LIKE ? OR classroom LIKE ?';
-      List<dynamic> whereArgs = ['%$query%', '%$query%', '%$query%'];
+          '(name LIKE ? OR teacher_name LIKE ? OR classroom LIKE ? OR code LIKE ?)';
+      List<dynamic> whereArgs = [
+        '%$query%',
+        '%$query%',
+        '%$query%',
+        '%$query%',
+      ];
 
       if (userId.isNotEmpty) {
         whereClause = '($whereClause) AND user_id = ?';
@@ -190,39 +253,16 @@ class CourseService {
     }
   }
 
-  Future<List<CourseModel>> getCoursesByTeacher(String teacherName) async {
-    try {
-      final db = await _localDb.database;
-      final userId = _currentUserId;
+  // Cloud Synchronization Methods
 
-      String whereClause = 'teacher_name = ?';
-      List<dynamic> whereArgs = [teacherName];
-
-      if (userId.isNotEmpty) {
-        whereClause = '$whereClause AND user_id = ?';
-        whereArgs.add(userId);
-      }
-
-      final List<Map<String, dynamic>> maps = await db.query(
-        'courses',
-        where: whereClause,
-        whereArgs: whereArgs,
-        orderBy: 'created_at DESC',
-      );
-
-      return maps.map((map) => CourseModel.fromJson(map)).toList();
-    } catch (e) {
-      throw Exception('Failed to get courses by teacher: $e');
-    }
-  }
-
-  // Cloud synchronization methods
-
+  /// Syncs unsynced local courses to cloud
   Future<void> syncToCloud() async {
-    if (_safeAuthController?.isAuthenticated != true) return;
+    if (_safeAuthController?.isAuthenticated != true || _cloudService == null) {
+      return;
+    }
 
     try {
-      final db = await _localDb.database;
+      final db = await _databaseHelper.database;
       final userId = _currentUserId;
 
       String whereClause = 'is_synced = ?';
@@ -241,7 +281,7 @@ class CourseService {
 
       for (final courseData in unsyncedCourses) {
         try {
-          await _cloudDb.createCourse(courseData);
+          await _cloudService!.createCourse(courseData);
           // Mark as synced
           await db.update(
             'courses',
@@ -260,12 +300,15 @@ class CourseService {
     }
   }
 
+  /// Syncs courses from cloud to local database
   Future<void> syncFromCloud() async {
-    if (_safeAuthController?.isAuthenticated != true) return;
+    if (_safeAuthController?.isAuthenticated != true || _cloudService == null) {
+      return;
+    }
 
     try {
-      final cloudCourses = await _cloudDb.getCloudDataForSync('courses');
-      final db = await _localDb.database;
+      final cloudCourses = await _cloudService!.getCloudDataForSync('courses');
+      final db = await _databaseHelper.database;
       final userId = _currentUserId;
 
       for (final courseData in cloudCourses) {
@@ -318,123 +361,11 @@ class CourseService {
     }
   }
 
-  // Statistics and analytics
+  // Data Validation and Business Rules
 
-  Future<int> getCourseCount() async {
-    try {
-      final db = await _localDb.database;
-      final result = await db.rawQuery('SELECT COUNT(*) as count FROM courses');
-      return result.first['count'] as int;
-    } catch (e) {
-      throw Exception('Failed to get course count: $e');
-    }
-  }
-
-  Future<List<String>> getAllTeachers() async {
-    try {
-      final db = await _localDb.database;
-      final result = await db.rawQuery(
-        'SELECT DISTINCT teacher_name FROM courses WHERE teacher_name IS NOT NULL AND teacher_name != "" ORDER BY teacher_name',
-      );
-      return result
-          .map((row) => row['teacher_name'] as String?)
-          .where((teacher) => teacher != null && teacher.isNotEmpty)
-          .cast<String>()
-          .toList();
-    } catch (e) {
-      throw Exception('Failed to get teachers: $e');
-    }
-  }
-
-  Future<List<String>> getAllClassrooms() async {
-    try {
-      final db = await _localDb.database;
-      final result = await db.rawQuery(
-        'SELECT DISTINCT classroom FROM courses WHERE classroom IS NOT NULL AND classroom != "" ORDER BY classroom',
-      );
-      return result
-          .map((row) => row['classroom'] as String?)
-          .where((classroom) => classroom != null && classroom.isNotEmpty)
-          .cast<String>()
-          .toList();
-    } catch (e) {
-      throw Exception('Failed to get classrooms: $e');
-    }
-  }
-
-  Future<Map<String, int>> getCourseStatistics() async {
-    try {
-      final totalCourses = await getCourseCount();
-      final teachers = await getAllTeachers();
-      final classrooms = await getAllClassrooms();
-
-      final db = await _localDb.database;
-      final syncedResult = await db.rawQuery(
-        'SELECT COUNT(*) as count FROM courses WHERE is_synced = 1',
-      );
-      final syncedCount = syncedResult.first['count'] as int;
-
-      return {
-        'total': totalCourses,
-        'teachers': teachers.length,
-        'classrooms': classrooms.length,
-        'synced': syncedCount,
-        'unsynced': totalCourses - syncedCount,
-      };
-    } catch (e) {
-      throw Exception('Failed to get course statistics: $e');
-    }
-  }
-
-  // Utility methods
-
-  String generateCourseId() {
-    return 'course_${DateTime.now().millisecondsSinceEpoch}_${(DateTime.now().microsecond % 1000).toString().padLeft(3, '0')}';
-  }
-
-  Future<bool> courseExists(String id) async {
-    try {
-      final course = await getCourseById(id);
-      return course != null;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  Future<bool> courseNameExists(String name, {String? excludeId}) async {
-    try {
-      final db = await _localDb.database;
-      final userId = _currentUserId;
-
-      String whereClause = 'LOWER(name) = ?';
-      List<dynamic> whereArgs = [name.toLowerCase()];
-
-      if (excludeId != null) {
-        whereClause += ' AND id != ?';
-        whereArgs.add(excludeId);
-      }
-
-      if (userId.isNotEmpty) {
-        whereClause += ' AND user_id = ?';
-        whereArgs.add(userId);
-      }
-
-      final result = await db.query(
-        'courses',
-        where: whereClause,
-        whereArgs: whereArgs,
-      );
-
-      return result.isNotEmpty;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  // Data validation and business rules
-
+  /// Validates course data according to business rules
   List<String> validateCourseData(CourseModel course) {
-    List<String> errors = [];
+    final errors = <String>[];
 
     // Validate course name
     if (course.name.trim().isEmpty) {
@@ -475,8 +406,10 @@ class CourseService {
       errors.add('Credits must be between 1 and 10');
     }
 
-    // Validate schedule if provided
-    if (course.schedule.isNotEmpty && course.schedule.length > 200) {
+    // Validate schedule
+    if (course.schedule.trim().isEmpty) {
+      errors.add('Schedule is required');
+    } else if (course.schedule.length > 200) {
       errors.add('Schedule must not exceed 200 characters');
     }
 
@@ -490,15 +423,14 @@ class CourseService {
     return errors;
   }
 
-  Future<bool> isValidCourseCode(String code, {String? excludeId}) async {
-    if (code.trim().isEmpty) return true; // Code is optional
-
+  /// Checks if a course name already exists
+  Future<bool> courseNameExists(String name, {String? excludeId}) async {
     try {
-      final db = await _localDb.database;
+      final db = await _databaseHelper.database;
       final userId = _currentUserId;
 
-      String whereClause = 'LOWER(code) = ?';
-      List<dynamic> whereArgs = [code.toLowerCase()];
+      String whereClause = 'LOWER(name) = ?';
+      List<dynamic> whereArgs = [name.toLowerCase()];
 
       if (excludeId != null) {
         whereClause += ' AND id != ?';
@@ -516,12 +448,13 @@ class CourseService {
         whereArgs: whereArgs,
       );
 
-      return result.isEmpty;
+      return result.isNotEmpty;
     } catch (e) {
       return false;
     }
   }
 
+  /// Validates business rules for a course
   Future<bool> validateBusinessRules(
     CourseModel course, {
     bool isUpdate = false,
@@ -533,20 +466,12 @@ class CourseService {
     );
     if (nameExists) return false;
 
-    // Check for duplicate course code if provided
-    if (course.code != null && course.code!.isNotEmpty) {
-      final codeValid = await isValidCourseCode(
-        course.code!,
-        excludeId: isUpdate ? course.id : null,
-      );
-      if (!codeValid) return false;
-    }
-
     return true;
   }
 
-  // Import/Export functionality
+  // Import/Export Functionality
 
+  /// Exports all courses to JSON format
   Future<String> exportCoursesToJson() async {
     try {
       final courses = await getAllCourses();
@@ -554,32 +479,30 @@ class CourseService {
         'version': '1.0',
         'exportDate': DateTime.now().toIso8601String(),
         'userId': _currentUserId,
+        'appName': 'My Pi',
+        'dataType': 'courses',
         'courses': courses.map((course) => course.toJson()).toList(),
       };
+
       return jsonEncode(exportData);
     } catch (e) {
       throw Exception('Failed to export courses: $e');
     }
   }
 
-  Future<File> exportCoursesToFile(String filePath) async {
-    try {
-      final jsonData = await exportCoursesToJson();
-      final file = File(filePath);
-      await file.writeAsString(jsonData);
-      return file;
-    } catch (e) {
-      throw Exception('Failed to export courses to file: $e');
-    }
-  }
-
+  /// Imports courses from JSON data
   Future<List<CourseModel>> importCoursesFromJson(String jsonData) async {
     try {
       final data = jsonDecode(jsonData) as Map<String, dynamic>;
-      final coursesData = data['courses'] as List<dynamic>;
 
-      List<CourseModel> importedCourses = [];
-      List<String> errors = [];
+      // Validate import data structure
+      if (!data.containsKey('courses')) {
+        throw Exception('Invalid import data: missing courses array');
+      }
+
+      final coursesData = data['courses'] as List<dynamic>;
+      final importedCourses = <CourseModel>[];
+      final errors = <String>[];
 
       for (final courseData in coursesData) {
         try {
@@ -629,226 +552,133 @@ class CourseService {
     }
   }
 
-  Future<List<CourseModel>> importCoursesFromFile(String filePath) async {
-    try {
-      final file = File(filePath);
-      final jsonData = await file.readAsString();
-      return await importCoursesFromJson(jsonData);
-    } catch (e) {
-      throw Exception('Failed to import courses from file: $e');
-    }
-  }
+  // Statistics Calculation for Dashboard
 
-  // Enhanced statistics calculation
-
-  Future<Map<String, dynamic>> getAdvancedCourseStatistics() async {
+  /// Gets basic course count
+  Future<int> getCourseCount() async {
     try {
-      final db = await _localDb.database;
+      final db = await _databaseHelper.database;
       final userId = _currentUserId;
 
       String whereClause = userId.isNotEmpty ? 'user_id = ?' : '';
       List<dynamic> whereArgs = userId.isNotEmpty ? [userId] : [];
 
-      // Basic counts
-      final totalResult = await db.rawQuery(
+      final result = await db.rawQuery(
         'SELECT COUNT(*) as count FROM courses ${whereClause.isNotEmpty ? "WHERE $whereClause" : ""}',
         whereArgs,
       );
-      final totalCourses = totalResult.first['count'] as int;
 
-      // Get unique teachers
-      final teachersResult = await db.rawQuery(
-        'SELECT DISTINCT teacher_name FROM courses ${whereClause.isNotEmpty ? "WHERE $whereClause" : ""}',
-        whereArgs,
-      );
-      final teachers = teachersResult
-          .map((row) => row['teacher_name'] as String)
-          .toList();
+      return result.first['count'] as int;
+    } catch (e) {
+      throw Exception('Failed to get course count: $e');
+    }
+  }
 
-      // Get unique classrooms
-      final classroomsResult = await db.rawQuery(
-        'SELECT DISTINCT classroom FROM courses ${whereClause.isNotEmpty ? "WHERE $whereClause" : ""}',
-        whereArgs,
-      );
-      final classrooms = classroomsResult
-          .map((row) => row['classroom'] as String)
-          .toList();
+  /// Gets all unique teachers
+  Future<List<String>> getAllTeachers() async {
+    try {
+      final db = await _databaseHelper.database;
+      final userId = _currentUserId;
 
-      // Credits distribution
-      final creditsResult = await db.rawQuery(
-        'SELECT credits, COUNT(*) as count FROM courses ${whereClause.isNotEmpty ? "WHERE $whereClause" : ""} GROUP BY credits',
-        whereArgs,
-      );
-      Map<int, int> creditsDistribution = {};
-      for (final row in creditsResult) {
-        creditsDistribution[row['credits'] as int] = row['count'] as int;
+      String whereClause = 'teacher_name IS NOT NULL AND teacher_name != ""';
+      List<dynamic> whereArgs = [];
+
+      if (userId.isNotEmpty) {
+        whereClause += ' AND user_id = ?';
+        whereArgs.add(userId);
       }
 
-      // Total credits
-      final totalCreditsResult = await db.rawQuery(
-        'SELECT SUM(credits) as total FROM courses ${whereClause.isNotEmpty ? "WHERE $whereClause" : ""}',
+      final result = await db.rawQuery(
+        'SELECT DISTINCT teacher_name FROM courses WHERE $whereClause ORDER BY teacher_name',
         whereArgs,
       );
-      final totalCredits = totalCreditsResult.first['total'] as int? ?? 0;
 
-      // Sync status
+      return result
+          .map((row) => row['teacher_name'] as String?)
+          .where((teacher) => teacher != null && teacher.isNotEmpty)
+          .cast<String>()
+          .toList();
+    } catch (e) {
+      throw Exception('Failed to get teachers: $e');
+    }
+  }
+
+  /// Gets all unique classrooms
+  Future<List<String>> getAllClassrooms() async {
+    try {
+      final db = await _databaseHelper.database;
+      final userId = _currentUserId;
+
+      String whereClause = 'classroom IS NOT NULL AND classroom != ""';
+      List<dynamic> whereArgs = [];
+
+      if (userId.isNotEmpty) {
+        whereClause += ' AND user_id = ?';
+        whereArgs.add(userId);
+      }
+
+      final result = await db.rawQuery(
+        'SELECT DISTINCT classroom FROM courses WHERE $whereClause ORDER BY classroom',
+        whereArgs,
+      );
+
+      return result
+          .map((row) => row['classroom'] as String?)
+          .where((classroom) => classroom != null && classroom.isNotEmpty)
+          .cast<String>()
+          .toList();
+    } catch (e) {
+      throw Exception('Failed to get classrooms: $e');
+    }
+  }
+
+  /// Gets comprehensive course statistics
+  Future<Map<String, int>> getCourseStatistics() async {
+    try {
+      final totalCourses = await getCourseCount();
+      final teachers = await getAllTeachers();
+      final classrooms = await getAllClassrooms();
+
+      final db = await _databaseHelper.database;
+      final userId = _currentUserId;
+
+      String whereClause = userId.isNotEmpty ? 'user_id = ?' : '';
+      List<dynamic> whereArgs = userId.isNotEmpty ? [userId] : [];
+
+      // Get sync statistics
       final syncedResult = await db.rawQuery(
         'SELECT COUNT(*) as count FROM courses WHERE is_synced = 1 ${whereClause.isNotEmpty ? "AND $whereClause" : ""}',
         whereClause.isNotEmpty ? whereArgs : [],
       );
+
       final syncedCount = syncedResult.first['count'] as int;
 
-      // Courses by month (creation date)
-      final monthlyResult = await db.rawQuery('''SELECT 
-           strftime('%Y-%m', created_at) as month, 
-           COUNT(*) as count 
-           FROM courses 
-           ${whereClause.isNotEmpty ? "WHERE $whereClause" : ""}
-           GROUP BY strftime('%Y-%m', created_at) 
-           ORDER BY month DESC 
-           LIMIT 12''', whereArgs);
-      Map<String, int> monthlyDistribution = {};
-      for (final row in monthlyResult) {
-        monthlyDistribution[row['month'] as String] = row['count'] as int;
-      }
-
       return {
-        'totalCourses': totalCourses,
-        'totalTeachers': teachers.length,
-        'totalClassrooms': classrooms.length,
-        'totalCredits': totalCredits,
-        'averageCredits': totalCourses > 0
-            ? (totalCredits / totalCourses).toStringAsFixed(1)
-            : '0.0',
-        'syncedCourses': syncedCount,
-        'unsyncedCourses': totalCourses - syncedCount,
-        'syncPercentage': totalCourses > 0
-            ? ((syncedCount / totalCourses) * 100).toStringAsFixed(1)
-            : '0.0',
-        'creditsDistribution': creditsDistribution,
-        'monthlyDistribution': monthlyDistribution,
-        'teachers': teachers,
-        'classrooms': classrooms,
-        'lastUpdated': DateTime.now().toIso8601String(),
+        'total': totalCourses,
+        'teachers': teachers.length,
+        'classrooms': classrooms.length,
+        'synced': syncedCount,
+        'unsynced': totalCourses - syncedCount,
       };
     } catch (e) {
-      throw Exception('Failed to get advanced course statistics: $e');
+      throw Exception('Failed to get course statistics: $e');
     }
   }
 
-  // Conflict resolution for sync operations
+  // Utility methods
 
-  Future<CourseModel?> resolveConflict(
-    CourseModel localCourse,
-    CourseModel cloudCourse,
-  ) async {
-    try {
-      // Simple conflict resolution: use the most recently updated course
-      if (localCourse.updatedAt.isAfter(cloudCourse.updatedAt)) {
-        return localCourse;
-      } else if (cloudCourse.updatedAt.isAfter(localCourse.updatedAt)) {
-        return cloudCourse;
-      } else {
-        // If same timestamp, prefer local changes
-        return localCourse;
-      }
-    } catch (e) {
-      print('Error resolving conflict: $e');
-      return localCourse; // Default to local version
-    }
+  /// Generates a unique course ID
+  String generateCourseId() {
+    return 'course_${DateTime.now().millisecondsSinceEpoch}_${(DateTime.now().microsecond % 1000).toString().padLeft(3, '0')}';
   }
 
-  Future<void> syncWithConflictResolution() async {
-    if (_safeAuthController?.isAuthenticated != true) return;
-
+  /// Checks if a course exists
+  Future<bool> courseExists(String id) async {
     try {
-      final db = await _localDb.database;
-      final userId = _currentUserId;
-
-      // Get all local courses
-      final localCourses = await getAllCourses();
-
-      // Get all cloud courses for user
-      final cloudCourses = await _cloudDb.getCloudDataForSync('courses');
-
-      // Create map for easier lookup
-      Map<String, dynamic> cloudMap = {
-        for (var courseData in cloudCourses.where(
-          (c) => c['user_id'] == userId,
-        ))
-          courseData['id']: courseData,
-      };
-
-      List<String> conflicts = [];
-
-      // Process each local course
-      for (final localCourse in localCourses) {
-        if (cloudMap.containsKey(localCourse.id)) {
-          // Conflict: exists in both local and cloud
-          final cloudData = cloudMap[localCourse.id];
-          final cloudCourse = CourseModel.fromJson(cloudData);
-
-          final resolved = await resolveConflict(localCourse, cloudCourse);
-          if (resolved != null) {
-            if (resolved.id == localCourse.id) {
-              // Use local version - upload to cloud
-              await _cloudDb.updateCourse(localCourse.id, localCourse.toJson());
-              await db.update(
-                'courses',
-                {
-                  'is_synced': 1,
-                  'last_sync_at': DateTime.now().toIso8601String(),
-                },
-                where: 'id = ? AND user_id = ?',
-                whereArgs: [localCourse.id, userId],
-              );
-            } else {
-              // Use cloud version - update local
-              await db.update(
-                'courses',
-                {
-                  ...cloudCourse.toJson(),
-                  'is_synced': 1,
-                  'last_sync_at': DateTime.now().toIso8601String(),
-                },
-                where: 'id = ? AND user_id = ?',
-                whereArgs: [localCourse.id, userId],
-              );
-            }
-          }
-          cloudMap.remove(localCourse.id);
-        } else {
-          // Local only - upload to cloud
-          if (!localCourse.isSynced) {
-            await _cloudDb.createCourse(localCourse.toJson());
-            await db.update(
-              'courses',
-              {
-                'is_synced': 1,
-                'last_sync_at': DateTime.now().toIso8601String(),
-              },
-              where: 'id = ? AND user_id = ?',
-              whereArgs: [localCourse.id, userId],
-            );
-          }
-        }
-      }
-
-      // Process remaining cloud courses (cloud only)
-      for (final cloudData in cloudMap.values) {
-        final cloudCourse = CourseModel.fromJson(cloudData);
-        await db.insert('courses', {
-          ...cloudCourse.toJson(),
-          'is_synced': 1,
-          'last_sync_at': DateTime.now().toIso8601String(),
-        });
-      }
-
-      if (conflicts.isNotEmpty) {
-        print('Resolved ${conflicts.length} conflicts during sync');
-      }
+      final course = await getCourseById(id);
+      return course != null;
     } catch (e) {
-      throw Exception('Failed to sync with conflict resolution: $e');
+      return false;
     }
   }
 }

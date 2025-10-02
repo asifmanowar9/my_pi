@@ -14,7 +14,7 @@ class DatabaseHelper {
 
   DatabaseHelper._internal();
 
-  static const int _currentVersion = 1;
+  static const int _currentVersion = 2;
   static const String _databaseName = 'my_pi.db';
 
   Future<Database> get database async {
@@ -58,7 +58,7 @@ class DatabaseHelper {
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
         name TEXT NOT NULL,
-        code TEXT NOT NULL UNIQUE,
+        code TEXT UNIQUE,
         credits INTEGER NOT NULL DEFAULT 3,
         instructor TEXT,
         color TEXT DEFAULT '#2196F3',
@@ -137,8 +137,53 @@ class DatabaseHelper {
   Future<void> _migrateToVersion(Database db, int version) async {
     switch (version) {
       case 2:
-        // Example migration for version 2
-        // await db.execute('ALTER TABLE courses ADD COLUMN semester TEXT');
+        // Migration for version 2: Make code field nullable in courses table
+        print('🔄 Migrating database to version 2: Making code field nullable');
+
+        // SQLite doesn't support ALTER COLUMN, so we need to recreate the table
+        await db.execute('PRAGMA foreign_keys = OFF');
+
+        // Create temporary table with new schema
+        await db.execute('''
+          CREATE TABLE courses_new(
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            code TEXT UNIQUE,
+            credits INTEGER NOT NULL DEFAULT 3,
+            instructor TEXT,
+            color TEXT DEFAULT '#2196F3',
+            semester TEXT,
+            year INTEGER,
+            is_active INTEGER DEFAULT 1,
+            is_synced INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+          )
+        ''');
+
+        // Copy data from old table to new table
+        await db.execute('''
+          INSERT INTO courses_new 
+          SELECT id, user_id, name, code, credits, instructor, color, 
+                 semester, year, is_active, is_synced, created_at, updated_at
+          FROM courses
+        ''');
+
+        // Drop old table
+        await db.execute('DROP TABLE courses');
+
+        // Rename new table to original name
+        await db.execute('ALTER TABLE courses_new RENAME TO courses');
+
+        // Recreate indexes
+        await db.execute(
+          'CREATE INDEX idx_courses_user_id ON courses(user_id)',
+        );
+
+        await db.execute('PRAGMA foreign_keys = ON');
+        print('✅ Database migration to version 2 completed');
         break;
       case 3:
         // Example migration for version 3

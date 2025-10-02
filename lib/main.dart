@@ -2,17 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'firebase_options.dart';
-import 'core/routes.dart';
+import 'core/routes/app_routes.dart';
+import 'core/controllers/navigation_controller.dart';
 import 'shared/themes/app_theme.dart';
 import 'shared/services/firebase_service.dart';
 import 'shared/services/notification_service.dart';
 import 'shared/services/storage_service.dart';
-import 'core/database/database_helper_clean.dart';
+import 'shared/services/cloud_database_service.dart';
+import 'core/database/database_helper_clean.dart' as DatabaseHelperClean;
 import 'features/auth/services/auth_service.dart';
 import 'features/auth/controllers/auth_controller.dart';
+import 'features/courses/services/course_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -56,20 +58,36 @@ Future<void> _initializeServices() async {
       if (Firebase.apps.isNotEmpty) {
         Get.put(FirebaseService(), permanent: true);
         Get.put(AuthService(), permanent: true);
-        // Initialize AuthController early to prevent GetX errors
-        Get.put(AuthController(), permanent: true);
       }
     } catch (e) {
       debugPrint('Firebase service not available: $e');
-      // Initialize AuthController even if Firebase fails
+    }
+
+    // Initialize AuthController only once
+    if (!Get.isRegistered<AuthController>()) {
       Get.put(AuthController(), permanent: true);
     }
 
     Get.put(NotificationService(), permanent: true);
-    Get.put(DatabaseHelper(), permanent: true);
+    Get.put(DatabaseHelperClean.DatabaseHelper(), permanent: true);
+
+    // Initialize Cloud Database Service if Firebase is available
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        Get.put(CloudDatabaseService(), permanent: true);
+      }
+    } catch (e) {
+      debugPrint('Cloud database service not available: $e');
+    }
+
+    // Initialize CourseService
+    Get.put(CourseService(), permanent: true);
 
     // Initialize Theme Controller
     Get.put(ThemeController(), permanent: true);
+
+    // Initialize Navigation Controller
+    Get.put(NavigationController(), permanent: true);
 
     // Initialize Notification Service
     await Get.find<NotificationService>().initialize();
@@ -89,7 +107,7 @@ class MyApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: Get.find<ThemeController>().theme,
-      initialRoute: AppRoutes.initial,
+      initialRoute: AppRoutes.splash,
       getPages: AppRoutes.routes,
       defaultTransition: Transition.cupertino,
       transitionDuration: const Duration(milliseconds: 300),

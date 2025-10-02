@@ -8,231 +8,311 @@ class LoginPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final authController = Get.put(AuthController());
+    final authController = Get.find<AuthController>();
+    final loginFormKey = GlobalKey<FormState>(); // Local form key
     final size = MediaQuery.of(context).size;
     final isTablet = size.width > 600;
 
     return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.symmetric(
-            horizontal: isTablet ? size.width * 0.25 : 24.0,
-            vertical: 20.0,
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFe0e3e7), Color(0xFFf5e6e0), Color(0xFFe9d6f5)],
           ),
-          child: Form(
-            key: authController.loginFormKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(height: size.height * 0.08),
-
-                // App Logo and Title
-                Column(
-                  children: [
-                    Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        color: Colors.blue,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Icon(
-                        Icons.school,
-                        size: 60,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'My Pi',
-                      style: TextStyle(
-                        fontSize: isTablet ? 36 : 32,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue.shade700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Student Assistant App',
-                      style: TextStyle(
-                        fontSize: isTablet ? 18 : 16,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
-                ),
-
-                SizedBox(height: size.height * 0.08),
-
-                // Skip Authentication Option - Prominently Displayed
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.blue.shade200),
+        ),
+        child: Stack(
+          children: [
+            // Skip button in top-right corner
+            Positioned(
+              top: 50,
+              right: 20,
+              child: TextButton(
+                onPressed: () => authController.continueAsGuest(),
+                style: TextButton.styleFrom(
+                  backgroundColor: Colors.white.withOpacity(0.2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
                   ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline, color: Colors.blue.shade600),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'You can use the app without signing in',
-                          style: TextStyle(
-                            color: Colors.blue.shade700,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => authController.continueAsGuest(),
-                        child: const Text('Skip'),
-                      ),
-                    ],
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
                   ),
                 ),
-
-                const SizedBox(height: 32),
-
-                // Email Field
-                _CustomTextField(
-                  controller: authController.emailController,
-                  label: 'Email',
-                  hint: 'Enter your email',
-                  keyboardType: TextInputType.emailAddress,
-                  prefixIcon: Icons.email_outlined,
-                  validator: authController.validateEmail,
-                ),
-
-                const SizedBox(height: 16),
-
-                // Password Field
-                Obx(
-                  () => _CustomTextField(
-                    controller: authController.passwordController,
-                    label: 'Password',
-                    hint: 'Enter your password',
-                    obscureText: authController.obscurePassword,
-                    prefixIcon: Icons.lock_outlined,
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        authController.obscurePassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                      ),
-                      onPressed: authController.togglePasswordVisibility,
-                    ),
-                    validator: authController.validatePassword,
+                child: const Text(
+                  'Skip',
+                  style: TextStyle(
+                    color: Colors.black54,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-
-                const SizedBox(height: 8),
-
-                // Forgot Password
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => Get.toNamed(Routes.FORGOT_PASSWORD),
-                    child: const Text('Forgot Password?'),
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // Error Display
-                Obx(
-                  () => authController.hasError
-                      ? Container(
-                          padding: const EdgeInsets.all(12),
-                          margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.red.shade200),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.error_outline,
-                                color: Colors.red.shade600,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  authController.error,
-                                  style: TextStyle(color: Colors.red.shade700),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : const SizedBox.shrink(),
-                ),
-
-                // Login Button with Loading Indicator
-                Obx(
-                  () => _CustomButton(
-                    onPressed: authController.isSigningIn
-                        ? null
-                        : authController.signInWithEmailAndPassword,
-                    isLoading: authController.isSigningIn,
-                    child: const Text('Sign In'),
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // Divider
-                Row(
-                  children: [
-                    const Expanded(child: Divider()),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        'or continue with',
-                        style: TextStyle(color: Colors.grey.shade600),
-                      ),
-                    ),
-                    const Expanded(child: Divider()),
-                  ],
-                ),
-
-                const SizedBox(height: 24),
-
-                // Google Sign-In Button
-                Obx(
-                  () => _SocialButton(
-                    onPressed: authController.isLoading
-                        ? null
-                        : authController.signInWithGoogle,
-                    isLoading: authController.isLoading,
-                    icon: 'G',
-                    label: 'Continue with Google',
-                  ),
-                ),
-
-                const SizedBox(height: 32),
-
-                // Register Link
-                Row(
+              ),
+            ),
+            // Main content
+            Center(
+              child: SingleChildScrollView(
+                child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      "Don't have an account? ",
-                      style: TextStyle(color: Colors.grey.shade600),
-                    ),
-                    TextButton(
-                      onPressed: () => Get.offNamed(Routes.REGISTER),
-                      child: const Text('Sign Up'),
+                    // Glassmorphic Card
+                    Container(
+                      width: isTablet ? 420 : 340,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 32,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.85),
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 32,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Form(
+                        key: loginFormKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // Logo
+                            Center(
+                              child: Container(
+                                width: 56,
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade100,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: const Icon(
+                                  Icons.verified_user_rounded,
+                                  color: Colors.blue,
+                                  size: 32,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            // Title
+                            const Center(
+                              child: Text(
+                                'Login',
+                                style: TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Center(
+                              child: Text(
+                                'Enter your email and password to log in',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 28),
+                            // Email Field
+                            _CustomTextField(
+                              controller: authController.emailController,
+                              hint: 'example@gmail.com',
+                              keyboardType: TextInputType.emailAddress,
+                              prefixIcon: Icons.email_outlined,
+                              validator: authController.validateEmail,
+                            ),
+                            const SizedBox(height: 16),
+                            // Password Field
+                            Obx(
+                              () => _CustomTextField(
+                                controller: authController.passwordController,
+                                hint: '••••••',
+                                obscureText: authController.obscurePassword,
+                                prefixIcon: Icons.lock_outline,
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    authController.obscurePassword
+                                        ? Icons.visibility_off
+                                        : Icons.visibility,
+                                    color: Colors.grey.shade600,
+                                    size: 20,
+                                  ),
+                                  onPressed:
+                                      authController.togglePasswordVisibility,
+                                ),
+                                validator: authController.validatePassword,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            // Remember me & Forgot password
+                            Row(
+                              children: [
+                                SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: Checkbox(
+                                    value: false,
+                                    onChanged: (_) {},
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    visualDensity: VisualDensity.compact,
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'Remember me',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.black54,
+                                  ),
+                                ),
+                                const Spacer(),
+                                TextButton(
+                                  onPressed: () =>
+                                      Get.toNamed(Routes.FORGOT_PASSWORD),
+                                  style: TextButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    minimumSize: const Size(0, 0),
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: const Text(
+                                    'Forgot Password ?',
+                                    style: TextStyle(fontSize: 14),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            // Error Display
+                            Obx(
+                              () => authController.hasError
+                                  ? Container(
+                                      padding: const EdgeInsets.all(10),
+                                      margin: const EdgeInsets.only(bottom: 16),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.shade50,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: Colors.red.shade200,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.error_outline,
+                                            color: Colors.red.shade600,
+                                            size: 20,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              authController.error,
+                                              style: TextStyle(
+                                                color: Colors.red.shade700,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                            // Login Button
+                            Obx(
+                              () => _CustomButton(
+                                onPressed: authController.isSigningIn
+                                    ? null
+                                    : () {
+                                        if (loginFormKey.currentState!
+                                            .validate()) {
+                                          authController
+                                              .signInWithEmailAndPassword();
+                                        }
+                                      },
+                                isLoading: authController.isSigningIn,
+                                child: const Text('Log In'),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            // Divider
+                            Row(
+                              children: [
+                                const Expanded(child: Divider()),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                  child: Text(
+                                    'Or login with',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                                const Expanded(child: Divider()),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            // Google Sign-In Button
+                            Obx(
+                              () => _SocialButton(
+                                onPressed: authController.isLoading
+                                    ? null
+                                    : authController.signInWithGoogle,
+                                isLoading: authController.isLoading,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            // Sign Up Link
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text(
+                                  "Don't have an account? ",
+                                  style: TextStyle(
+                                    color: Colors.black54,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: () => Get.toNamed(Routes.REGISTER),
+                                  style: TextButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    minimumSize: const Size(0, 0),
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: const Text(
+                                    'Sign Up',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
-
-                const SizedBox(height: 20),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -242,7 +322,6 @@ class LoginPage extends StatelessWidget {
 // Custom TextField Widget
 class _CustomTextField extends StatelessWidget {
   final TextEditingController controller;
-  final String label;
   final String hint;
   final IconData prefixIcon;
   final Widget? suffixIcon;
@@ -252,7 +331,6 @@ class _CustomTextField extends StatelessWidget {
 
   const _CustomTextField({
     required this.controller,
-    required this.label,
     required this.hint,
     required this.prefixIcon,
     this.suffixIcon,
@@ -268,12 +346,16 @@ class _CustomTextField extends StatelessWidget {
       obscureText: obscureText,
       keyboardType: keyboardType,
       validator: validator,
+      style: const TextStyle(fontSize: 16),
       decoration: InputDecoration(
-        labelText: label,
         hintText: hint,
-        prefixIcon: Icon(prefixIcon),
+        hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 16),
+        prefixIcon: Icon(prefixIcon, color: Colors.grey.shade600, size: 20),
         suffixIcon: suffixIcon,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: Colors.grey.shade300),
@@ -288,6 +370,10 @@ class _CustomTextField extends StatelessWidget {
         ),
         filled: true,
         fillColor: Colors.grey.shade50,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
       ),
     );
   }
@@ -312,12 +398,12 @@ class _CustomButton extends StatelessWidget {
       child: ElevatedButton(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.blue,
+          backgroundColor: const Color(0xFF4A5568),
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          elevation: 2,
+          elevation: 0,
         ),
         child: isLoading
             ? const SizedBox(
@@ -337,16 +423,9 @@ class _CustomButton extends StatelessWidget {
 // Social Button Widget
 class _SocialButton extends StatelessWidget {
   final VoidCallback? onPressed;
-  final String icon;
-  final String label;
   final bool isLoading;
 
-  const _SocialButton({
-    required this.onPressed,
-    required this.icon,
-    required this.label,
-    this.isLoading = false,
-  });
+  const _SocialButton({required this.onPressed, this.isLoading = false});
 
   @override
   Widget build(BuildContext context) {
@@ -359,6 +438,7 @@ class _SocialButton extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
+          backgroundColor: Colors.white,
         ),
         child: isLoading
             ? const SizedBox(
@@ -372,22 +452,33 @@ class _SocialButton extends StatelessWidget {
                   Container(
                     width: 24,
                     height: 24,
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Text(
-                        icon,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                    decoration: const BoxDecoration(shape: BoxShape.circle),
+                    child: Image.network(
+                      'https://developers.google.com/identity/images/g-logo.png',
+                      width: 24,
+                      height: 24,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          width: 24,
+                          height: 24,
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: Text(
+                              'G',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Text(label),
                 ],
               ),
       ),

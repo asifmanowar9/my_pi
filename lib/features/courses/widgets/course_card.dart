@@ -99,6 +99,24 @@ class CourseCard extends StatelessWidget {
                         ],
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    // Edit button
+                    IconButton(
+                      icon: const Icon(Icons.edit_outlined),
+                      onPressed: () {
+                        if (onEdit != null) {
+                          onEdit!();
+                        } else {
+                          Get.to(() => EditCoursePage(course: course));
+                        }
+                      },
+                      tooltip: 'Edit Course',
+                      style: IconButton.styleFrom(
+                        backgroundColor: theme.colorScheme.primaryContainer,
+                        foregroundColor: theme.colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
@@ -169,13 +187,6 @@ class CourseCard extends StatelessWidget {
                     PopupMenuButton<String>(
                       onSelected: (value) async {
                         switch (value) {
-                          case 'edit':
-                            if (onEdit != null) {
-                              onEdit!();
-                            } else {
-                              Get.to(() => EditCoursePage(course: course));
-                            }
-                            break;
                           case 'duplicate':
                             await courseController.duplicateCourse(course);
                             break;
@@ -194,16 +205,6 @@ class CourseCard extends StatelessWidget {
                         }
                       },
                       itemBuilder: (context) => [
-                        const PopupMenuItem(
-                          value: 'edit',
-                          child: Row(
-                            children: [
-                              Icon(Icons.edit, size: 18),
-                              SizedBox(width: 8),
-                              Text('Edit'),
-                            ],
-                          ),
-                        ),
                         const PopupMenuItem(
                           value: 'duplicate',
                           child: Row(

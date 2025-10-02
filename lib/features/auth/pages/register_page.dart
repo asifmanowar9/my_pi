@@ -8,297 +8,389 @@ class RegisterPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final authController = Get.put(AuthController());
+    final authController = Get.find<AuthController>();
+    final registerFormKey = GlobalKey<FormState>(debugLabel: 'register_form');
     final size = MediaQuery.of(context).size;
-    final isTablet = size.width > 600;
 
     return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.symmetric(
-            horizontal: isTablet ? size.width * 0.25 : 24.0,
-            vertical: 20.0,
+      body: Container(
+        height: size.height,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFE3F2FD), Color(0xFFBBDEFB), Color(0xFF90CAF9)],
           ),
-          child: Form(
-            key: authController.registerFormKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(height: size.height * 0.05),
-
-                // Header
-                Row(
-                  children: [
-                    IconButton(
-                      onPressed: () => Get.back(),
-                      icon: const Icon(Icons.arrow_back),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Create Account',
-                      style: TextStyle(
-                        fontSize: isTablet ? 28 : 24,
-                        fontWeight: FontWeight.bold,
+        ),
+        child: SafeArea(
+          child: Stack(
+            children: [
+              // Main Content
+              Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24.0,
+                    vertical: 32.0,
+                  ),
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 400),
+                    padding: const EdgeInsets.all(32.0),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.3),
+                        width: 1,
                       ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 8),
-
-                Text(
-                  'Join My Pi to track your academic progress',
-                  style: TextStyle(
-                    fontSize: isTablet ? 18 : 16,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-
-                SizedBox(height: size.height * 0.05),
-
-                // Skip Authentication Option - Prominently Displayed
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.green.shade200),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline, color: Colors.green.shade600),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'You can use the app without creating an account',
-                          style: TextStyle(
-                            color: Colors.green.shade700,
-                            fontWeight: FontWeight.w500,
-                          ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
                         ),
-                      ),
-                      TextButton(
-                        onPressed: () => authController.continueAsGuest(),
-                        child: const Text('Skip'),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 32),
-
-                // Name Field
-                _CustomTextField(
-                  controller: authController.nameController,
-                  label: 'Full Name',
-                  hint: 'Enter your full name',
-                  prefixIcon: Icons.person_outlined,
-                  validator: authController.validateName,
-                ),
-
-                const SizedBox(height: 16),
-
-                // Email Field
-                _CustomTextField(
-                  controller: authController.emailController,
-                  label: 'Email',
-                  hint: 'Enter your email',
-                  keyboardType: TextInputType.emailAddress,
-                  prefixIcon: Icons.email_outlined,
-                  validator: authController.validateEmail,
-                ),
-
-                const SizedBox(height: 16),
-
-                // Password Field
-                Obx(
-                  () => _CustomTextField(
-                    controller: authController.passwordController,
-                    label: 'Password',
-                    hint: 'Create a password (min. 6 characters)',
-                    obscureText: authController.obscurePassword,
-                    prefixIcon: Icons.lock_outlined,
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        authController.obscurePassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                      ),
-                      onPressed: authController.togglePasswordVisibility,
+                      ],
                     ),
-                    validator: authController.validatePassword,
-                  ),
-                ),
+                    child: Form(
+                      key: authController.registerFormKey,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Title
+                          Text(
+                            'Sign Up',
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey.shade800,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
 
-                const SizedBox(height: 16),
+                          const SizedBox(height: 8),
 
-                // Confirm Password Field
-                Obx(
-                  () => _CustomTextField(
-                    controller: authController.confirmPasswordController,
-                    label: 'Confirm Password',
-                    hint: 'Confirm your password',
-                    obscureText: authController.obscureConfirmPassword,
-                    prefixIcon: Icons.lock_outlined,
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        authController.obscureConfirmPassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                      ),
-                      onPressed: authController.toggleConfirmPasswordVisibility,
-                    ),
-                    validator: authController.validateConfirmPassword,
-                  ),
-                ),
+                          Text(
+                            'Create an account to continue',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey.shade600,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
 
-                const SizedBox(height: 24),
+                          const SizedBox(height: 32),
 
-                // Terms Acceptance
-                Obx(
-                  () => Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Checkbox(
-                        value: authController.acceptTerms,
-                        onChanged: (value) =>
-                            authController.acceptTerms = value ?? false,
-                      ),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () => authController.acceptTerms =
-                              !authController.acceptTerms,
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 12),
-                            child: RichText(
-                              text: TextSpan(
-                                style: TextStyle(
-                                  color: Colors.grey.shade700,
-                                  fontSize: 14,
+                          // First Name Field
+                          _CustomTextField(
+                            controller: authController.nameController,
+                            hint: 'First Name',
+                            prefixIcon: Icons.person_outlined,
+                            validator: authController.validateName,
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          // Last Name Field (using a new controller if available)
+                          _CustomTextField(
+                            controller: TextEditingController(),
+                            hint: 'Last Name',
+                            prefixIcon: Icons.person_outlined,
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          // Email Field
+                          _CustomTextField(
+                            controller: authController.emailController,
+                            hint: 'Email',
+                            prefixIcon: Icons.email_outlined,
+                            keyboardType: TextInputType.emailAddress,
+                            validator: authController.validateEmail,
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          // Birth Date Field
+                          _CustomTextField(
+                            controller: TextEditingController(),
+                            hint: 'Birth Date',
+                            prefixIcon: Icons.cake_outlined,
+                            suffixIcon: const Icon(Icons.calendar_today),
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          // Password Field
+                          Obx(
+                            () => _CustomTextField(
+                              controller: authController.passwordController,
+                              hint: 'Set Password',
+                              obscureText: authController.obscurePassword,
+                              prefixIcon: Icons.lock_outlined,
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  authController.obscurePassword
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
                                 ),
-                                children: [
-                                  const TextSpan(text: 'I agree to the '),
-                                  TextSpan(
-                                    text: 'Terms of Service',
-                                    style: TextStyle(
-                                      color: Colors.blue,
-                                      decoration: TextDecoration.underline,
-                                    ),
-                                  ),
-                                  const TextSpan(text: ' and '),
-                                  TextSpan(
-                                    text: 'Privacy Policy',
-                                    style: TextStyle(
-                                      color: Colors.blue,
-                                      decoration: TextDecoration.underline,
-                                    ),
-                                  ),
-                                ],
+                                onPressed:
+                                    authController.togglePasswordVisibility,
                               ),
+                              validator: authController.validatePassword,
                             ),
                           ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
 
-                const SizedBox(height: 24),
+                          const SizedBox(height: 16),
 
-                // Error Display
-                Obx(
-                  () => authController.hasError
-                      ? Container(
-                          padding: const EdgeInsets.all(12),
-                          margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.red.shade200),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.error_outline,
-                                color: Colors.red.shade600,
+                          // Confirm Password Field
+                          Obx(
+                            () => _CustomTextField(
+                              controller:
+                                  authController.confirmPasswordController,
+                              hint: 'Confirm Password',
+                              obscureText:
+                                  authController.obscureConfirmPassword,
+                              prefixIcon: Icons.lock_outlined,
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  authController.obscureConfirmPassword
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
+                                ),
+                                onPressed: authController
+                                    .toggleConfirmPasswordVisibility,
                               ),
-                              const SizedBox(width: 8),
-                              Expanded(
+                              validator: authController.validateConfirmPassword,
+                            ),
+                          ),
+
+                          const SizedBox(height: 24),
+
+                          // Terms Acceptance
+                          Obx(
+                            () => Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Checkbox(
+                                  value: authController.acceptTerms,
+                                  onChanged: (value) =>
+                                      authController.acceptTerms =
+                                          value ?? false,
+                                  activeColor: Colors.grey.shade700,
+                                ),
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => authController.acceptTerms =
+                                        !authController.acceptTerms,
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(top: 12),
+                                      child: RichText(
+                                        text: TextSpan(
+                                          style: TextStyle(
+                                            color: Colors.grey.shade700,
+                                            fontSize: 14,
+                                          ),
+                                          children: [
+                                            const TextSpan(
+                                              text: 'I agree to the ',
+                                            ),
+                                            TextSpan(
+                                              text: 'Terms of Service',
+                                              style: TextStyle(
+                                                color: Colors.blue.shade700,
+                                                decoration:
+                                                    TextDecoration.underline,
+                                              ),
+                                            ),
+                                            const TextSpan(text: ' and '),
+                                            TextSpan(
+                                              text: 'Privacy Policy',
+                                              style: TextStyle(
+                                                color: Colors.blue.shade700,
+                                                decoration:
+                                                    TextDecoration.underline,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 24),
+
+                          // Error Display
+                          Obx(
+                            () => authController.hasError
+                                ? Container(
+                                    padding: const EdgeInsets.all(12),
+                                    margin: const EdgeInsets.only(bottom: 16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.shade50,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: Colors.red.shade200,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.error_outline,
+                                          color: Colors.red.shade600,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            authController.error,
+                                            style: TextStyle(
+                                              color: Colors.red.shade700,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+
+                          // Register Button
+                          Obx(
+                            () => _CustomButton(
+                              onPressed:
+                                  (authController.isRegistering ||
+                                      !authController.acceptTerms)
+                                  ? null
+                                  : authController.registerWithEmailAndPassword,
+                              isLoading: authController.isRegistering,
+                              child: const Text('Register'),
+                            ),
+                          ),
+
+                          const SizedBox(height: 24),
+
+                          // Divider
+                          Row(
+                            children: [
+                              const Expanded(child: Divider()),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
                                 child: Text(
-                                  authController.error,
-                                  style: TextStyle(color: Colors.red.shade700),
+                                  'or continue with',
+                                  style: TextStyle(color: Colors.grey.shade600),
+                                ),
+                              ),
+                              const Expanded(child: Divider()),
+                            ],
+                          ),
+
+                          const SizedBox(height: 24),
+
+                          // Google Sign-In Button
+                          Obx(
+                            () => _SocialButton(
+                              onPressed: authController.isLoading
+                                  ? null
+                                  : authController.signInWithGoogle,
+                              isLoading: authController.isLoading,
+                            ),
+                          ),
+
+                          const SizedBox(height: 32),
+
+                          // Login Link
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                "Already have an account? ",
+                                style: TextStyle(color: Colors.grey.shade600),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  print(
+                                    'Sign In link pressed - using Get.back()',
+                                  );
+                                  Get.back();
+                                },
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: const Size(0, 0),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: Text(
+                                  'Login',
+                                  style: TextStyle(
+                                    color: Colors.blue.shade700,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                        )
-                      : const SizedBox.shrink(),
-                ),
-
-                // Register Button with Loading Indicator
-                Obx(
-                  () => _CustomButton(
-                    onPressed:
-                        (authController.isRegistering ||
-                            !authController.acceptTerms)
-                        ? null
-                        : authController.registerWithEmailAndPassword,
-                    isLoading: authController.isRegistering,
-                    child: const Text('Create Account'),
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // Divider
-                Row(
-                  children: [
-                    const Expanded(child: Divider()),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        'or continue with',
-                        style: TextStyle(color: Colors.grey.shade600),
+                        ],
                       ),
                     ),
-                    const Expanded(child: Divider()),
-                  ],
-                ),
-
-                const SizedBox(height: 24),
-
-                // Google Sign-In Button
-                Obx(
-                  () => _SocialButton(
-                    onPressed: authController.isLoading
-                        ? null
-                        : authController.signInWithGoogle,
-                    isLoading: authController.isLoading,
-                    icon: 'G',
-                    label: 'Continue with Google',
                   ),
                 ),
+              ),
 
-                const SizedBox(height: 32),
-
-                // Login Link
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      "Already have an account? ",
-                      style: TextStyle(color: Colors.grey.shade600),
+              // Skip Button in top-right corner (positioned last to be on top)
+              Positioned(
+                top: 16,
+                right: 16,
+                child: TextButton(
+                  onPressed: () {
+                    print('Skip button pressed');
+                    authController.continueAsGuest();
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.grey.shade700,
+                    backgroundColor: Colors.white.withOpacity(0.2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
                     ),
-                    TextButton(
-                      onPressed: () => Get.offNamed(Routes.LOGIN),
-                      child: const Text('Sign In'),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                  ],
+                  ),
+                  child: const Text(
+                    'Skip',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
                 ),
+              ),
 
-                const SizedBox(height: 20),
-              ],
-            ),
+              // Back Button in top-left corner (positioned last to be on top)
+              Positioned(
+                top: 16,
+                left: 16,
+                child: IconButton(
+                  onPressed: () {
+                    print('Back button pressed - attempting navigation');
+                    if (Navigator.canPop(context)) {
+                      print('Can pop - using Navigator.pop');
+                      Navigator.pop(context);
+                    } else {
+                      print('Cannot pop - using Get.back');
+                      Get.back();
+                    }
+                  },
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.white.withOpacity(0.2),
+                    foregroundColor: Colors.grey.shade700,
+                  ),
+                  icon: const Icon(Icons.arrow_back),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -306,10 +398,9 @@ class RegisterPage extends StatelessWidget {
   }
 }
 
-// Reusable Custom Components (same as LoginPage)
+// Custom Components
 class _CustomTextField extends StatelessWidget {
   final TextEditingController controller;
-  final String label;
   final String hint;
   final IconData prefixIcon;
   final Widget? suffixIcon;
@@ -319,7 +410,6 @@ class _CustomTextField extends StatelessWidget {
 
   const _CustomTextField({
     required this.controller,
-    required this.label,
     required this.hint,
     required this.prefixIcon,
     this.suffixIcon,
@@ -335,26 +425,37 @@ class _CustomTextField extends StatelessWidget {
       obscureText: obscureText,
       keyboardType: keyboardType,
       validator: validator,
+      style: TextStyle(color: Colors.grey.shade800, fontSize: 16),
       decoration: InputDecoration(
-        labelText: label,
         hintText: hint,
-        prefixIcon: Icon(prefixIcon),
+        hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 16),
+        prefixIcon: Icon(prefixIcon, color: Colors.grey.shade600),
         suffixIcon: suffixIcon,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.8),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+          borderSide: BorderSide(
+            color: Colors.white.withOpacity(0.3),
+            width: 1,
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.blue, width: 2),
+          borderSide: BorderSide(color: Colors.blue.shade300, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Colors.red),
         ),
-        filled: true,
-        fillColor: Colors.grey.shade50,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
       ),
     );
   }
@@ -378,12 +479,13 @@ class _CustomButton extends StatelessWidget {
       child: ElevatedButton(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.blue,
+          backgroundColor: Colors.grey.shade700,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          elevation: 2,
+          elevation: 0,
+          shadowColor: Colors.transparent,
         ),
         child: isLoading
             ? const SizedBox(
@@ -402,16 +504,9 @@ class _CustomButton extends StatelessWidget {
 
 class _SocialButton extends StatelessWidget {
   final VoidCallback? onPressed;
-  final String icon;
-  final String label;
   final bool isLoading;
 
-  const _SocialButton({
-    required this.onPressed,
-    required this.icon,
-    required this.label,
-    this.isLoading = false,
-  });
+  const _SocialButton({required this.onPressed, this.isLoading = false});
 
   @override
   Widget build(BuildContext context) {
@@ -420,7 +515,8 @@ class _SocialButton extends StatelessWidget {
       child: OutlinedButton(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
-          side: BorderSide(color: Colors.grey.shade300),
+          side: BorderSide(color: Colors.grey.shade400),
+          backgroundColor: Colors.white.withOpacity(0.8),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -441,18 +537,25 @@ class _SocialButton extends StatelessWidget {
                       color: Colors.red,
                       shape: BoxShape.circle,
                     ),
-                    child: Center(
+                    child: const Center(
                       child: Text(
-                        icon,
-                        style: const TextStyle(
+                        'G',
+                        style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
+                          fontSize: 14,
                         ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Text(label),
+                  Text(
+                    'Continue with Google',
+                    style: TextStyle(
+                      color: Colors.grey.shade700,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
       ),

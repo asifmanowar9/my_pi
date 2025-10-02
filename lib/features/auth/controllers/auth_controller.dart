@@ -76,6 +76,8 @@ class AuthController extends GetxController {
           // 5. Remember login state with GetStorage
           _storage.write('isLoggedIn', true);
           _storage.write('userId', user.uid);
+          // Clear any previous logout flag
+          _storage.write('hasLoggedOut', false);
         }
       } else {
         _storage.write('isLoggedIn', false);
@@ -209,6 +211,9 @@ class AuthController extends GetxController {
       // Clear user state first
       _user.value = null;
 
+      // Set explicit logout flag to prevent auto-login on app restart
+      _storage.write('hasLoggedOut', true);
+
       // Clear stored login state
       _storage.write('isLoggedIn', false);
       _storage.remove('userId');
@@ -324,11 +329,13 @@ class AuthController extends GetxController {
       // Set guest mode in storage
       _storage.write('isGuest', true);
       _storage.write('isLoggedIn', false);
+      // Clear any previous logout flag
+      _storage.write('hasLoggedOut', false);
       // Mark that user has passed welcome page
       _storage.write('hasSeenWelcome', true);
 
-      // Navigate to home page
-      Get.offAllNamed(Routes.HOME);
+      // Navigate to main screen (bottom navigation)
+      Get.offAllNamed('/main');
 
       // Show success message
       Get.snackbar(

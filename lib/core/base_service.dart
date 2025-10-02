@@ -46,7 +46,8 @@ abstract class BaseService extends GetxService {
   void handleError(int? statusCode, String? statusText) {
     switch (statusCode) {
       case 401:
-        Get.offAllNamed('/login');
+        // Navigate to splash which will handle auth redirect
+        Get.offAllNamed('/splash');
         break;
       case 403:
         Get.snackbar(

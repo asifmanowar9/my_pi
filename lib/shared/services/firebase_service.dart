@@ -40,20 +40,16 @@ class FirebaseService extends BaseService {
           storage.write('isLoggedIn', false);
           storage.remove('userId');
 
-          // Only navigate if we're not already on the login page
-          if (Get.currentRoute != '/login' && Get.currentRoute != '/welcome') {
-            Get.offAllNamed('/login');
-          }
+          // Don't auto-navigate on auth state changes
+          // Let the splash screen and manual logout handle navigation
         } else {
           debugPrint('User signed in: ${user.email}');
 
           // Only proceed with auto-login if local storage also says user is logged in
           // This prevents auto-login after an explicit logout
           if (localLoggedIn) {
-            // Only navigate if we're not already on the home page
-            if (Get.currentRoute != '/home' && Get.currentRoute != '/') {
-              Get.offAllNamed('/home');
-            }
+            // Don't auto-navigate on auth state changes
+            // Let the splash screen handle initial navigation
           } else {
             // User is authenticated in Firebase but not locally logged in
             // This means they logged out explicitly, so sign them out from Firebase too
