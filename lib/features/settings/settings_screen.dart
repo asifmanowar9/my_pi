@@ -154,6 +154,21 @@ class _NotificationSection extends StatelessWidget {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Get.toNamed('/profile/notifications'),
             ),
+            const Divider(),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.bug_report, color: Colors.orange),
+              title: Text(
+                'Notification Debugger',
+                style: AppTextStyles.cardSubtitle,
+              ),
+              subtitle: Text(
+                'Test and troubleshoot notifications',
+                style: AppTextStyles.caption,
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Get.toNamed('/debug/notifications'),
+            ),
           ],
         ),
       ),

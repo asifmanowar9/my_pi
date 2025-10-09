@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../models/course_model.dart';
-import '../models/course_assignment_model.dart';
+import '../models/assessment_model.dart';
 import '../controllers/course_controller.dart';
-import '../controllers/course_assignment_controller.dart';
-import '../widgets/grade_input_dialog.dart';
+import '../controllers/assessment_controller.dart';
+import '../services/grade_calculation_service.dart';
 import 'add_course_page.dart';
-import 'course_assignment_page.dart';
+import 'add_assessment_page.dart';
 
 class CourseDetailPage extends StatelessWidget {
   final CourseModel course;
@@ -544,8 +544,13 @@ class CourseDetailPage extends StatelessWidget {
 
             const SizedBox(height: 16),
 
-            // Assignments Section
-            _buildAssignmentsSection(context),
+            // Assessments Section (Unified - includes quizzes, labs, midterm, etc.)
+            _buildAssessmentsSection(context),
+
+            const SizedBox(height: 16),
+
+            // Overall Grade Section (Calculated from all assessments)
+            _buildOverallGradeSection(context),
 
             const SizedBox(height: 32),
           ],
@@ -554,250 +559,228 @@ class CourseDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildAssignmentsSection(BuildContext context) {
+  Widget _buildAssessmentsSection(BuildContext context) {
     final theme = Theme.of(context);
-    final assignmentController = Get.put(CourseAssignmentController());
+    final assessmentController = Get.put(AssessmentController());
 
-    // Load assignments when building
+    // Load assessments when building
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      assignmentController.loadAssignments(course.id);
+      assessmentController.loadAssessments(course.id);
     });
 
     return Obx(() {
-      final assignments = assignmentController.assignments;
-      final stats = assignmentController.statistics;
+      final assessments = assessmentController.assessments;
 
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Assignments Header with Add Button
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        child: Card(
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
+                    Icon(
+                      Icons.assessment_outlined,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Assessments',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                if (assessmentController.isLoading.value)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(20),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                else if (assessments.isEmpty)
+                  Center(
+                    child: Column(
                       children: [
                         Icon(
-                          Icons.assignment,
-                          color: theme.colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Assignments & Grades',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
+                          Icons.quiz_outlined,
+                          size: 48,
+                          color: theme.colorScheme.onSurfaceVariant.withOpacity(
+                            0.5,
                           ),
                         ),
-                        const Spacer(),
-                        IconButton(
-                          icon: const Icon(Icons.add_circle),
-                          onPressed: () {
-                            Get.to(() => CourseAssignmentPage(course: course));
-                          },
-                          tooltip: 'Add Assignment',
-                          style: IconButton.styleFrom(
-                            backgroundColor: theme.colorScheme.primaryContainer,
-                            foregroundColor: theme.colorScheme.primary,
+                        const SizedBox(height: 8),
+                        Text(
+                          'No Assessments Yet',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Add assessments to track grades',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant
+                                .withOpacity(0.7),
                           ),
                         ),
                       ],
                     ),
+                  )
+                else
+                  // Group by assessment type
+                  Column(
+                    children: AssessmentType.values.map((type) {
+                      final ofType = assessments
+                          .where((a) => a.type == type)
+                          .toList();
+                      if (ofType.isEmpty) return const SizedBox.shrink();
 
-                    if (assignments.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      // Statistics Row
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _buildStatChip(
-                            'Total',
-                            stats['total'].toString(),
-                            Icons.assignment,
-                            Colors.blue,
-                          ),
-                          _buildStatChip(
-                            'Completed',
-                            stats['completed'].toString(),
-                            Icons.check_circle,
-                            Colors.green,
-                          ),
-                          _buildStatChip(
-                            'Pending',
-                            stats['pending'].toString(),
-                            Icons.pending,
-                            Colors.orange,
-                          ),
-                          if (stats['graded'] > 0)
-                            _buildStatChip(
-                              'Graded',
-                              stats['graded'].toString(),
-                              Icons.grade,
-                              Colors.purple,
-                            ),
-                        ],
-                      ),
-
-                      if (stats['averageGrade'] != null) ...[
-                        const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.green.withOpacity(0.1),
-                                Colors.blue.withOpacity(0.1),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Colors.green.withOpacity(0.3),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.star, color: Colors.amber),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Average Grade: ${stats['averageGrade'].toStringAsFixed(1)}%',
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.green[700],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Assignments List
-            if (assignmentController.isLoading.value)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(20),
-                  child: CircularProgressIndicator(),
-                ),
-              )
-            else if (assignments.isEmpty)
-              Card(
-                elevation: 1,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.assignment_outlined,
-                        size: 64,
-                        color: theme.colorScheme.outline,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No Assignments Yet',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Add your first assignment to start tracking',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface.withOpacity(0.6),
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton.icon(
-                        onPressed: () {
-                          Get.to(() => CourseAssignmentPage(course: course));
-                        },
-                        icon: const Icon(Icons.add),
-                        label: const Text('Add Assignment'),
-                      ),
-                    ],
+                      return _buildAssessmentTypeGroup(
+                        context,
+                        type,
+                        ofType,
+                        assessmentController,
+                      );
+                    }).toList(),
                   ),
+
+                const SizedBox(height: 16),
+
+                // Add Assessment Button
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: AssessmentType.values.map((type) {
+                    return OutlinedButton.icon(
+                      onPressed: () async {
+                        final result = await Navigator.push<bool>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => AddAssessmentPage(
+                              courseId: course.id,
+                              preselectedType: type,
+                            ),
+                          ),
+                        );
+                        // Refresh assessments if successful
+                        if (result == true) {
+                          assessmentController.loadAssessments(course.id);
+                        }
+                      },
+                      icon: Text(type.icon),
+                      label: Text('Add ${type.displayName}'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                    );
+                  }).toList(),
                 ),
-              )
-            else
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: assignments.length,
-                itemBuilder: (context, index) {
-                  final assignment = assignments[index];
-                  return _buildAssignmentCard(
-                    context,
-                    assignment,
-                    assignmentController,
-                  );
-                },
-              ),
-          ],
+              ],
+            ),
+          ),
         ),
       );
     });
   }
 
-  Widget _buildStatChip(
-    String label,
-    String value,
-    IconData icon,
-    Color color,
+  Widget _buildAssessmentTypeGroup(
+    BuildContext context,
+    AssessmentType type,
+    List<AssessmentModel> assessments,
+    AssessmentController controller,
   ) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 6),
-          Text(
-            '$label: $value',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: color,
+    final theme = Theme.of(context);
+    final graded = assessments.where((a) => a.isGraded).toList();
+    double avgPercentage = 0;
+    if (graded.isNotEmpty) {
+      avgPercentage =
+          graded.map((a) => a.percentage!).reduce((a, b) => a + b) /
+          graded.length;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Text(type.icon, style: const TextStyle(fontSize: 20)),
+            const SizedBox(width: 8),
+            Text(
+              type.displayName,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-        ],
-      ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '${graded.length}/${assessments.length} graded',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+              ),
+            ),
+            if (graded.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green.withOpacity(0.3)),
+                ),
+                child: Text(
+                  'Avg: ${avgPercentage.toStringAsFixed(1)}%',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 8),
+        ...assessments.map((assessment) {
+          return _buildAssessmentCard(context, assessment, controller);
+        }).toList(),
+      ],
     );
   }
 
-  Widget _buildAssignmentCard(
+  Widget _buildAssessmentCard(
     BuildContext context,
-    CourseAssignmentModel assignment,
-    CourseAssignmentController controller,
+    AssessmentModel assessment,
+    AssessmentController controller,
   ) {
     final theme = Theme.of(context);
-    final isOverdue = assignment.isOverdue;
-    final hasGrade = assignment.hasGrade;
+    final isOverdue = assessment.isOverdue;
 
     return Card(
       elevation: 1,
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
@@ -808,48 +791,55 @@ class CourseDetailPage extends StatelessWidget {
         ),
       ),
       child: InkWell(
-        onTap: () {
-          Get.to(
-            () => CourseAssignmentPage(course: course, assignment: assignment),
+        onTap: () async {
+          final result = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(
+              builder: (context) => AddAssessmentPage(
+                courseId: course.id,
+                assessment: assessment,
+              ),
+            ),
           );
+          // Refresh assessments if successful
+          if (result == true) {
+            controller.loadAssessments(course.id);
+          }
         },
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  // Completion checkbox
                   Checkbox(
-                    value: assignment.isCompleted,
+                    value: assessment.isCompleted,
                     onChanged: (value) {
-                      controller.toggleCompletion(assignment);
+                      controller.toggleCompletion(assessment.id);
                     },
                   ),
-                  const SizedBox(width: 8),
-                  // Title
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          assignment.title,
-                          style: theme.textTheme.titleMedium?.copyWith(
+                          assessment.title,
+                          style: theme.textTheme.titleSmall?.copyWith(
                             fontWeight: FontWeight.bold,
-                            decoration: assignment.isCompleted
+                            decoration: assessment.isCompleted
                                 ? TextDecoration.lineThrough
                                 : null,
                           ),
                         ),
-                        if (assignment.dueDate != null) ...[
+                        if (assessment.dueDate != null) ...[
                           const SizedBox(height: 4),
                           Row(
                             children: [
                               Icon(
                                 Icons.calendar_today,
-                                size: 14,
+                                size: 12,
                                 color: isOverdue
                                     ? Colors.red
                                     : theme.colorScheme.onSurface.withOpacity(
@@ -858,7 +848,7 @@ class CourseDetailPage extends StatelessWidget {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                'Due: ${DateFormat('MMM dd').format(assignment.dueDate!)}',
+                                'Due: ${DateFormat('MMM dd, HH:mm').format(assessment.dueDate!)}',
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: isOverdue
                                       ? Colors.red
@@ -874,18 +864,18 @@ class CourseDetailPage extends StatelessWidget {
                                 const SizedBox(width: 4),
                                 Container(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
+                                    horizontal: 4,
                                     vertical: 2,
                                   ),
                                   decoration: BoxDecoration(
                                     color: Colors.red,
-                                    borderRadius: BorderRadius.circular(8),
+                                    borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: const Text(
                                     'OVERDUE',
                                     style: TextStyle(
                                       color: Colors.white,
-                                      fontSize: 10,
+                                      fontSize: 9,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -897,16 +887,15 @@ class CourseDetailPage extends StatelessWidget {
                       ],
                     ),
                   ),
-                  // Grade badge or add grade button
-                  if (hasGrade)
+                  if (assessment.isGraded)
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
+                        horizontal: 10,
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
                         color: Colors.green.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                           color: Colors.green.withOpacity(0.3),
                         ),
@@ -914,44 +903,29 @@ class CourseDetailPage extends StatelessWidget {
                       child: Column(
                         children: [
                           Text(
-                            '${assignment.gradePercentage?.toStringAsFixed(0)}%',
+                            '${assessment.percentage?.toStringAsFixed(1)}%',
                             style: const TextStyle(
-                              fontSize: 16,
+                              fontSize: 14,
                               fontWeight: FontWeight.bold,
                               color: Colors.green,
                             ),
                           ),
                           Text(
-                            assignment.gradeStatus ?? '',
+                            '${assessment.marks}/${assessment.maxMarks}',
                             style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
+                              fontSize: 10,
                               color: Colors.green[700],
                             ),
                           ),
                         ],
                       ),
-                    )
-                  else if (assignment.isCompleted)
-                    IconButton(
-                      icon: const Icon(Icons.grade),
-                      onPressed: () {
-                        showGradeInputDialog(assignment);
-                      },
-                      tooltip: 'Add Grade',
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.purple.withOpacity(0.1),
-                        foregroundColor: Colors.purple,
-                      ),
                     ),
                 ],
               ),
-
-              if (assignment.description != null &&
-                  assignment.description!.isNotEmpty) ...[
+              if (assessment.description?.isNotEmpty == true) ...[
                 const SizedBox(height: 8),
                 Text(
-                  assignment.description!,
+                  assessment.description!,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurface.withOpacity(0.6),
                   ),
@@ -959,27 +933,265 @@ class CourseDetailPage extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
-
-              if (hasGrade) ...[
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(Icons.grade, size: 16, color: Colors.green[700]),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${assignment.grade}/${assignment.maxGrade}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.green[700],
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildOverallGradeSection(BuildContext context) {
+    final theme = Theme.of(context);
+    final assessmentController = Get.find<AssessmentController>();
+
+    return Obx(() {
+      final assessments = assessmentController.assessments;
+      final gradedAssessments = assessments.where((a) => a.isGraded).toList();
+
+      if (gradedAssessments.isEmpty) {
+        return const SizedBox.shrink();
+      }
+
+      final gradeData = GradeCalculationService.calculateCourseGrade(
+        assessments,
+      );
+      final gpa = gradeData['gpa'] as double;
+      final letterGrade = gradeData['letterGrade'] as String;
+      final percentage = gradeData['percentage'] as double;
+      final status = gradeData['status'] as String;
+      final completionPercentage =
+          GradeCalculationService.getCompletionPercentage(assessments);
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Card(
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.star, color: theme.colorScheme.primary),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Overall Grade',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // GPA Display
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        theme.colorScheme.primaryContainer,
+                        theme.colorScheme.secondaryContainer,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildGradeMetric(
+                        context,
+                        'GPA',
+                        gpa.toStringAsFixed(2),
+                        Icons.assessment,
+                      ),
+                      Container(
+                        width: 1,
+                        height: 40,
+                        color: theme.colorScheme.outline.withOpacity(0.3),
+                      ),
+                      _buildGradeMetric(
+                        context,
+                        'Grade',
+                        letterGrade,
+                        Icons.grade,
+                      ),
+                      Container(
+                        width: 1,
+                        height: 40,
+                        color: theme.colorScheme.outline.withOpacity(0.3),
+                      ),
+                      _buildGradeMetric(
+                        context,
+                        'Score',
+                        '${percentage.toStringAsFixed(1)}%',
+                        Icons.percent,
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Status Badge
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: percentage >= 50
+                          ? Colors.green.withOpacity(0.1)
+                          : Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: percentage >= 50
+                            ? Colors.green.withOpacity(0.3)
+                            : Colors.red.withOpacity(0.3),
+                      ),
+                    ),
+                    child: Text(
+                      status,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: percentage >= 50 ? Colors.green : Colors.red,
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Completion Progress
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Assessment Completion',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: completionPercentage / 100,
+                        minHeight: 8,
+                        backgroundColor: theme.colorScheme.surfaceVariant,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          theme.colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${completionPercentage.toStringAsFixed(0)}% assessment types graded',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+
+                // Grade Breakdown by Type
+                Text(
+                  'Grade Breakdown',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...AssessmentType.values.map((type) {
+                  final breakdown = GradeCalculationService.getTypeBreakdown(
+                    assessments,
+                    type,
+                  );
+                  if (breakdown['graded'] == 0) {
+                    return const SizedBox.shrink();
+                  }
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Text(type.icon, style: const TextStyle(fontSize: 16)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            type.displayName,
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ),
+                        Text(
+                          '${breakdown['percentage'].toStringAsFixed(1)}%',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceVariant,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            'Weight: ${type.weight}%',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ],
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
+  Widget _buildGradeMetric(
+    BuildContext context,
+    String label,
+    String value,
+    IconData icon,
+  ) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Icon(icon, size: 20, color: theme.colorScheme.primary),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.onPrimaryContainer,
+          ),
+        ),
+        Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onPrimaryContainer.withOpacity(0.7),
+          ),
+        ),
+      ],
     );
   }
 

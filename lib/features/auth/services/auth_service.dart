@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:get/get.dart';
 import 'package:flutter/foundation.dart';
@@ -239,11 +240,14 @@ class AuthService extends BaseService {
   Future<void> _createUserInFirestore(UserModel user) async {
     try {
       if (Get.isRegistered<FirebaseService>()) {
-        final firebaseService = Get.find<FirebaseService>();
-        await firebaseService.addDocument('users', user.toJson());
+        final firestore = FirebaseFirestore.instance;
+        // Use user.id as document ID to match Firestore security rules
+        await firestore.collection('users').doc(user.id).set(user.toJson());
+        debugPrint('✅ User created in Firestore: ${user.email}');
       }
     } catch (e) {
       debugPrint('Error creating user in Firestore: $e');
+      // Don't rethrow - Firestore sync is optional, auth succeeded
     }
   }
 

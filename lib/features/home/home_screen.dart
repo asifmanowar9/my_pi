@@ -367,20 +367,31 @@ class _UpcomingDeadlinesSection extends StatelessWidget {
               );
             }
 
+            // Show up to 10 upcoming deadlines
+            final displayCount = deadlines.length > 10 ? 10 : deadlines.length;
+            final hasMore = deadlines.length > 10;
+
             return Column(
               children: [
-                ...deadlines.map((item) {
+                ...deadlines.take(displayCount).map((item) {
                   final assignment = item['assignment'];
                   final courseName = item['courseName'] as String;
-                  final dueDate = DateTime.parse(assignment.dueDate);
+                  // assignment.dueDate is already a DateTime object, not a String
+                  final dueDate = assignment.dueDate;
                   final formattedDate = DateFormat('MMM dd').format(dueDate);
+
+                  // Convert enum to String (e.g., AssignmentPriority.high -> "high")
+                  final priorityString = assignment.priority
+                      .toString()
+                      .split('.')
+                      .last;
 
                   return _DeadlineItem(
                     title: assignment.title,
                     subject: courseName,
                     dueDate: formattedDate,
-                    priority: assignment.priority,
-                    priorityColor: _getPriorityColor(assignment.priority),
+                    priority: priorityString,
+                    priorityColor: _getPriorityColor(priorityString),
                   );
                 }).toList(),
                 const SizedBox(height: 16),
@@ -392,7 +403,9 @@ class _UpcomingDeadlinesSection extends StatelessWidget {
                       navController.changeTab(2);
                     },
                     child: Text(
-                      'View All Assignments',
+                      hasMore
+                          ? 'View All ${deadlines.length} Assignments'
+                          : 'View All Assignments',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.primary,
                         fontWeight: FontWeight.w600,

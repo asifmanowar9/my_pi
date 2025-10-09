@@ -41,6 +41,7 @@ class AppConstants {
   static const String assignmentChannelId = 'assignment_notifications';
   static const String gradeChannelId = 'grade_notifications';
   static const String generalChannelId = 'general_notifications';
+  static const String courseReminderChannelId = 'course_reminder_notifications';
 
   // Date Formats
   static const String dateFormat = 'yyyy-MM-dd';

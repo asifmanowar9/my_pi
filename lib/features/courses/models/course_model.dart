@@ -20,6 +20,12 @@ class CourseModel {
   final int? durationMonths;
   final String status; // 'active', 'completed', 'upcoming'
 
+  // New fields for class schedule and notifications
+  final List<int>? scheduleDays; // Day of week: 1 (Monday) to 7 (Sunday)
+  final String? classTime; // Format: "HH:mm" (24-hour format)
+  final int?
+  reminderMinutes; // Minutes before class to send notification (10 or 15)
+
   CourseModel({
     required this.id,
     required this.userId,
@@ -39,6 +45,9 @@ class CourseModel {
     this.endDate,
     this.durationMonths,
     String? status,
+    this.scheduleDays,
+    this.classTime,
+    this.reminderMinutes,
   }) : status = status ?? _calculateStatus(startDate, endDate);
 
   // Calculate status based on dates
@@ -101,6 +110,46 @@ class CourseModel {
     return 'Not set';
   }
 
+  // Helper methods for schedule display
+  String get scheduleDaysText {
+    if (scheduleDays == null || scheduleDays!.isEmpty) return 'No days set';
+
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final sortedDays = List<int>.from(scheduleDays!)..sort();
+    return sortedDays.map((day) => dayNames[day - 1]).join(', ');
+  }
+
+  String get classTimeText {
+    if (classTime == null || classTime!.isEmpty) return 'No time set';
+
+    // Convert 24-hour format to 12-hour format
+    try {
+      final parts = classTime!.split(':');
+      final hour = int.parse(parts[0]);
+      final minute = int.parse(parts[1]);
+
+      final period = hour >= 12 ? 'PM' : 'AM';
+      final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+      final displayMinute = minute.toString().padLeft(2, '0');
+
+      return '$displayHour:$displayMinute $period';
+    } catch (e) {
+      return classTime ?? 'Invalid time';
+    }
+  }
+
+  String get reminderText {
+    if (reminderMinutes == null) return 'No reminder';
+    return '$reminderMinutes min before class';
+  }
+
+  bool get hasSchedule {
+    return scheduleDays != null &&
+        scheduleDays!.isNotEmpty &&
+        classTime != null &&
+        classTime!.isNotEmpty;
+  }
+
   // Factory constructor for creating from JSON
   factory CourseModel.fromJson(Map<String, dynamic> json) {
     final startDate = json['start_date'] != null
@@ -109,6 +158,19 @@ class CourseModel {
     final endDate = json['end_date'] != null
         ? DateTime.parse(json['end_date'] as String)
         : null;
+
+    // Parse schedule days from comma-separated string
+    List<int>? scheduleDays;
+    if (json['schedule_days'] != null && json['schedule_days'] != '') {
+      try {
+        scheduleDays = (json['schedule_days'] as String)
+            .split(',')
+            .map((e) => int.parse(e.trim()))
+            .toList();
+      } catch (e) {
+        scheduleDays = null;
+      }
+    }
 
     return CourseModel(
       id: json['id'] as String? ?? '',
@@ -135,6 +197,9 @@ class CourseModel {
       endDate: endDate,
       durationMonths: json['duration_months'] as int?,
       status: json['status'] as String?,
+      scheduleDays: scheduleDays,
+      classTime: json['class_time'] as String?,
+      reminderMinutes: json['reminder_minutes'] as int?,
     );
   }
 
@@ -159,6 +224,9 @@ class CourseModel {
       'end_date': endDate?.toIso8601String(),
       'duration_months': durationMonths,
       'status': status,
+      'schedule_days': scheduleDays?.join(','),
+      'class_time': classTime,
+      'reminder_minutes': reminderMinutes,
     };
   }
 
@@ -183,6 +251,9 @@ class CourseModel {
     DateTime? endDate,
     int? durationMonths,
     String? status,
+    List<int>? scheduleDays,
+    String? classTime,
+    int? reminderMinutes,
   }) {
     return CourseModel(
       id: id ?? this.id,
@@ -203,6 +274,9 @@ class CourseModel {
       endDate: endDate ?? this.endDate,
       durationMonths: durationMonths ?? this.durationMonths,
       status: status ?? this.status,
+      scheduleDays: scheduleDays ?? this.scheduleDays,
+      classTime: classTime ?? this.classTime,
+      reminderMinutes: reminderMinutes ?? this.reminderMinutes,
     );
   }
 

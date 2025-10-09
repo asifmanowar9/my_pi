@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../models/course_model.dart';
+import '../models/course_grade_model.dart';
 import '../controllers/course_controller.dart';
 import '../pages/edit_course_page.dart';
+import '../../../core/database/database_helper_clean.dart';
 
 class CourseCard extends StatelessWidget {
   final CourseModel course;
@@ -149,6 +151,70 @@ class CourseCard extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 12),
+                // GPA Display
+                FutureBuilder<Map<String, dynamic>?>(
+                  future: DatabaseHelper().getCourseGrade(course.id),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData && snapshot.data != null) {
+                      final gradeModel = CourseGradeModel.fromJson(
+                        snapshot.data!,
+                      );
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                theme.colorScheme.primaryContainer,
+                                theme.colorScheme.secondaryContainer,
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              _buildGradeInfo(
+                                'GPA',
+                                gradeModel.gpa.toStringAsFixed(2),
+                                Icons.assessment,
+                                theme,
+                              ),
+                              Container(
+                                width: 1,
+                                height: 30,
+                                color: theme.colorScheme.outline.withOpacity(
+                                  0.3,
+                                ),
+                              ),
+                              _buildGradeInfo(
+                                'Grade',
+                                gradeModel.letterGrade,
+                                Icons.star,
+                                theme,
+                              ),
+                              Container(
+                                width: 1,
+                                height: 30,
+                                color: theme.colorScheme.outline.withOpacity(
+                                  0.3,
+                                ),
+                              ),
+                              _buildGradeInfo(
+                                'Score',
+                                '${gradeModel.totalPercentage.toStringAsFixed(1)}%',
+                                Icons.percent,
+                                theme,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
                 Wrap(
                   spacing: 16,
                   runSpacing: 8,
@@ -241,6 +307,34 @@ class CourseCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildGradeInfo(
+    String label,
+    String value,
+    IconData icon,
+    ThemeData theme,
+  ) {
+    return Column(
+      children: [
+        Icon(icon, size: 16, color: theme.colorScheme.primary),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.onPrimaryContainer,
+          ),
+        ),
+        Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onPrimaryContainer.withOpacity(0.7),
+            fontSize: 10,
+          ),
+        ),
+      ],
     );
   }
 

@@ -14,7 +14,7 @@ class DatabaseHelper {
 
   DatabaseHelper._internal();
 
-  static const int _currentVersion = 2;
+  static const int _currentVersion = 3;
   static const String _databaseName = 'my_pi.db';
 
   Future<Database> get database async {

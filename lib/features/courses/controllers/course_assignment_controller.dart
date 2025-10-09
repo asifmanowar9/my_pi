@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
 import '../models/course_assignment_model.dart';
-import '../../../core/database/database_helper_clean.dart'
-    as DatabaseHelperClean;
+import '../../../core/database/database_helper_clean.dart';
 
 class CourseAssignmentController extends GetxController {
-  final DatabaseHelperClean.DatabaseHelper _dbHelper =
-      Get.find<DatabaseHelperClean.DatabaseHelper>();
+  final DatabaseHelper _dbHelper = Get.find<DatabaseHelper>();
 
   // Observable lists
   final RxList<CourseAssignmentModel> assignments =

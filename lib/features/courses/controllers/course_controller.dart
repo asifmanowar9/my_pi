@@ -4,6 +4,7 @@ import '../models/course_model.dart';
 import '../services/course_service.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../../shared/services/storage_service.dart';
+import '../../../shared/services/notification_service.dart';
 
 class CourseController extends GetxController {
   static CourseController get instance => Get.find();
@@ -55,6 +56,26 @@ class CourseController extends GetxController {
   final Rx<DateTime?> _startDate = Rx<DateTime?>(null);
   DateTime? get startDate => _startDate.value;
   void setStartDate(DateTime? date) => _startDate.value = date;
+
+  // Schedule notification fields
+  final RxList<int> _selectedDays = <int>[].obs;
+  final Rx<TimeOfDay?> _classTime = Rx<TimeOfDay?>(null);
+  final RxInt _reminderMinutes = 0.obs;
+
+  List<int> get selectedDays => _selectedDays;
+  TimeOfDay? get classTime => _classTime.value;
+  int get reminderMinutes => _reminderMinutes.value;
+
+  void toggleWeekday(int day) {
+    if (_selectedDays.contains(day)) {
+      _selectedDays.remove(day);
+    } else {
+      _selectedDays.add(day);
+    }
+  }
+
+  void setClassTime(TimeOfDay? time) => _classTime.value = time;
+  void setReminderMinutes(int minutes) => _reminderMinutes.value = minutes;
 
   // Color selection
   final Rx<Color?> _selectedColor = Rx<Color?>(null);
@@ -206,6 +227,9 @@ class CourseController extends GetxController {
 
       await _courseService.createCourse(course);
 
+      // Schedule notifications if schedule is set
+      await _scheduleNotificationsForCourse(course);
+
       _showSuccessSnackbar('Course created successfully');
       clearForm();
       await loadCourses();
@@ -246,6 +270,9 @@ class CourseController extends GetxController {
 
       await _courseService.updateCourse(updatedCourse);
 
+      // Update notifications (cancel old, schedule new)
+      await _scheduleNotificationsForCourse(updatedCourse);
+
       _showSuccessSnackbar('Course updated successfully');
       clearForm();
       await loadCourses();
@@ -268,6 +295,9 @@ class CourseController extends GetxController {
       if (!confirmed) return false;
 
       await _courseService.deleteCourse(courseId);
+
+      // Cancel notifications for this course
+      await _cancelNotificationsForCourse(courseId);
 
       _showSuccessSnackbar('Course deleted successfully');
       await loadCourses();
@@ -420,6 +450,24 @@ class CourseController extends GetxController {
     durationController.text = course.durationMonths?.toString() ?? '';
     _startDate.value = course.startDate;
 
+    // Set schedule notification fields
+    _selectedDays.value = course.scheduleDays != null
+        ? List<int>.from(course.scheduleDays!)
+        : [];
+    if (course.classTime != null && course.classTime!.isNotEmpty) {
+      try {
+        final parts = course.classTime!.split(':');
+        final hour = int.parse(parts[0]);
+        final minute = int.parse(parts[1]);
+        _classTime.value = TimeOfDay(hour: hour, minute: minute);
+      } catch (e) {
+        _classTime.value = null;
+      }
+    } else {
+      _classTime.value = null;
+    }
+    _reminderMinutes.value = course.reminderMinutes ?? 0;
+
     // Set the color if available
     if (course.color != null && course.color!.isNotEmpty) {
       try {
@@ -452,6 +500,9 @@ class CourseController extends GetxController {
     durationController.clear();
     _startDate.value = null;
     _selectedColor.value = null;
+    _selectedDays.clear();
+    _classTime.value = null;
+    _reminderMinutes.value = 0;
     formKey.currentState?.reset();
   }
 
@@ -802,6 +853,14 @@ class CourseController extends GetxController {
       }
     }
 
+    // Convert TimeOfDay to "HH:mm" format
+    String? classTimeStr;
+    if (_classTime.value != null) {
+      final hour = _classTime.value!.hour.toString().padLeft(2, '0');
+      final minute = _classTime.value!.minute.toString().padLeft(2, '0');
+      classTimeStr = '$hour:$minute';
+    }
+
     return CourseModel(
       id: baseId ?? _courseService.generateCourseId(),
       userId: _safeAuthController?.user?.uid ?? '',
@@ -824,6 +883,13 @@ class CourseController extends GetxController {
       startDate: _startDate.value,
       endDate: endDate,
       durationMonths: durationMonths,
+      scheduleDays: _selectedDays.isNotEmpty
+          ? List<int>.from(_selectedDays)
+          : null,
+      classTime: classTimeStr,
+      reminderMinutes: _reminderMinutes.value > 0
+          ? _reminderMinutes.value
+          : null,
     );
   }
 
@@ -974,6 +1040,56 @@ class CourseController extends GetxController {
       await loadStatistics();
     } catch (e) {
       _showErrorSnackbar('Import Failed', e.toString());
+    }
+  }
+
+  // Notification scheduling methods
+  Future<void> _scheduleNotificationsForCourse(CourseModel course) async {
+    try {
+      // Check if course has schedule information
+      if (course.scheduleDays == null ||
+          course.scheduleDays!.isEmpty ||
+          course.classTime == null ||
+          course.classTime!.isEmpty ||
+          course.reminderMinutes == null ||
+          course.reminderMinutes == 0) {
+        print(
+          '⚠️ Course ${course.name} does not have complete schedule information',
+        );
+        return;
+      }
+
+      // Get notification service
+      final notificationService = Get.find<NotificationService>();
+
+      // Cancel any existing notifications for this course
+      await notificationService.cancelCourseReminders(course.id);
+
+      // Schedule new notifications
+      await notificationService.scheduleCourseReminders(
+        courseId: course.id,
+        courseName: course.name,
+        classroom: course.classroom,
+        scheduleDays: course.scheduleDays!,
+        classTime: course.classTime!,
+        reminderMinutes: course.reminderMinutes!,
+      );
+
+      print('✅ Notifications scheduled for ${course.name}');
+    } catch (e) {
+      print('❌ Failed to schedule notifications for ${course.name}: $e');
+      // Don't throw - notification failure shouldn't prevent course creation
+    }
+  }
+
+  Future<void> _cancelNotificationsForCourse(String courseId) async {
+    try {
+      final notificationService = Get.find<NotificationService>();
+      await notificationService.cancelCourseReminders(courseId);
+      print('✅ Notifications cancelled for course: $courseId');
+    } catch (e) {
+      print('❌ Failed to cancel notifications for course $courseId: $e');
+      // Don't throw - notification failure shouldn't prevent course deletion
     }
   }
 }

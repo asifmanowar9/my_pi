@@ -84,7 +84,60 @@ class AddCoursePage extends StatelessWidget {
                   required: true,
                   validator: controller.validateSchedule,
                 ),
+                const SizedBox(height: 24),
+
+                // Class Schedule Section
+                Text(
+                  'Class Schedule & Reminders',
+                  style: AppTextStyles.cardSubtitle.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Set up class days and time to receive notifications before class starts',
+                  style: AppTextStyles.caption.copyWith(
+                    color: Get.theme.colorScheme.onSurface.withOpacity(0.7),
+                  ),
+                ),
                 const SizedBox(height: 16),
+
+                // Weekday Selector
+                Text(
+                  'Class Days',
+                  style: AppTextStyles.caption.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Obx(() => _buildWeekdaySelector(controller)),
+                const SizedBox(height: 16),
+
+                // Class Time Picker
+                Obx(
+                  () => _buildTimeField(
+                    label: 'Class Time',
+                    hint: controller.classTime == null
+                        ? 'Select class time'
+                        : _formatTime(controller.classTime!),
+                    icon: Icons.access_time_outlined,
+                    onTap: () => _selectClassTime(context, controller),
+                    value: controller.classTime,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Reminder Minutes Dropdown
+                Text(
+                  'Reminder Before Class',
+                  style: AppTextStyles.caption.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Obx(() => _buildReminderDropdown(controller)),
+                const SizedBox(height: 24),
 
                 // Credits
                 _buildTextField(
@@ -468,5 +521,121 @@ class AddCoursePage extends StatelessWidget {
     if (picked != null) {
       controller.setStartDate(picked);
     }
+  }
+
+  Widget _buildWeekdaySelector(CourseController controller) {
+    const weekdays = [
+      {'day': 'M', 'name': 'Monday', 'value': 1},
+      {'day': 'T', 'name': 'Tuesday', 'value': 2},
+      {'day': 'W', 'name': 'Wednesday', 'value': 3},
+      {'day': 'T', 'name': 'Thursday', 'value': 4},
+      {'day': 'F', 'name': 'Friday', 'value': 5},
+      {'day': 'S', 'name': 'Saturday', 'value': 6},
+      {'day': 'S', 'name': 'Sunday', 'value': 7},
+    ];
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: weekdays.map((weekday) {
+        final dayValue = weekday['value'] as int;
+        final isSelected = controller.selectedDays.contains(dayValue);
+
+        return FilterChip(
+          label: Text(weekday['day'] as String),
+          selected: isSelected,
+          onSelected: (selected) {
+            controller.toggleWeekday(dayValue);
+          },
+          selectedColor: Get.theme.colorScheme.primaryContainer,
+          checkmarkColor: Get.theme.colorScheme.primary,
+          labelStyle: TextStyle(
+            color: isSelected
+                ? Get.theme.colorScheme.primary
+                : Get.theme.colorScheme.onSurface,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          ),
+          tooltip: weekday['name'] as String,
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildTimeField({
+    required String label,
+    required String hint,
+    required IconData icon,
+    required VoidCallback onTap,
+    TimeOfDay? value,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          prefixIcon: Icon(icon),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          filled: true,
+        ),
+        child: Text(
+          value == null ? hint : _formatTime(value),
+          style: TextStyle(
+            color: value == null
+                ? Get.theme.colorScheme.onSurfaceVariant.withOpacity(0.5)
+                : Get.theme.colorScheme.onSurface,
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatTime(TimeOfDay time) {
+    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$hour:$minute $period';
+  }
+
+  void _selectClassTime(
+    BuildContext context,
+    CourseController controller,
+  ) async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: controller.classTime ?? TimeOfDay.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Get.theme.copyWith(colorScheme: Get.theme.colorScheme),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      controller.setClassTime(picked);
+    }
+  }
+
+  Widget _buildReminderDropdown(CourseController controller) {
+    return DropdownButtonFormField<int>(
+      value: controller.reminderMinutes == 0
+          ? null
+          : controller.reminderMinutes,
+      decoration: InputDecoration(
+        prefixIcon: const Icon(Icons.notifications_outlined),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        filled: true,
+        hintText: 'Select reminder time',
+      ),
+      items: const [
+        DropdownMenuItem(value: null, child: Text('No reminder')),
+        DropdownMenuItem(value: 10, child: Text('10 minutes before')),
+        DropdownMenuItem(value: 15, child: Text('15 minutes before')),
+      ],
+      onChanged: (value) {
+        controller.setReminderMinutes(value ?? 0);
+      },
+    );
   }
 }

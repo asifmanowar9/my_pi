@@ -2,45 +2,103 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../shared/themes/app_text_styles.dart';
 import '../../shared/themes/app_colors.dart';
+import '../courses/controllers/course_controller.dart';
+import '../courses/controllers/assessment_controller.dart';
+import '../courses/services/grade_calculation_service.dart';
+import '../courses/models/assessment_model.dart';
+import 'course_grade_details_page.dart';
 
 class GradesScreen extends StatelessWidget {
   const GradesScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // Initialize controllers
+    final courseController = Get.put(CourseController());
+    final assessmentController = Get.put(AssessmentController());
+
+    // Load data
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      courseController.loadCourses();
+      assessmentController.loadAllAssessments();
+    });
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Grades', style: AppTextStyles.appBarTitle),
         actions: [
           IconButton(
-            icon: const Icon(Icons.description),
-            onPressed: () => Get.toNamed('/transcript'),
-            tooltip: 'View Transcript',
-          ),
-          IconButton(
-            icon: const Icon(Icons.filter_list),
+            icon: const Icon(Icons.refresh),
             onPressed: () {
-              // TODO: Implement filter
+              courseController.loadCourses();
+              assessmentController.loadAllAssessments();
             },
+            tooltip: 'Refresh',
           ),
         ],
       ),
-      body: const SingleChildScrollView(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [_GradeSummary(), SizedBox(height: 24), _CourseGrades()],
-        ),
-      ),
+      body: Obx(() {
+        if (courseController.isLoading ||
+            assessmentController.isLoading.value) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _GradeSummary(
+                courseController: courseController,
+                assessmentController: assessmentController,
+              ),
+              const SizedBox(height: 24),
+              _CourseGrades(
+                courseController: courseController,
+                assessmentController: assessmentController,
+              ),
+            ],
+          ),
+        );
+      }),
     );
   }
 }
 
 class _GradeSummary extends StatelessWidget {
-  const _GradeSummary();
+  final CourseController courseController;
+  final AssessmentController assessmentController;
+
+  const _GradeSummary({
+    required this.courseController,
+    required this.assessmentController,
+  });
 
   @override
   Widget build(BuildContext context) {
+    // Calculate overall GPA from all courses
+    double totalGPA = 0;
+    int coursesWithGrades = 0;
+
+    for (var course in courseController.courses) {
+      final courseAssessments = assessmentController.assessments
+          .where((a) => a.courseId == course.id)
+          .toList();
+
+      if (courseAssessments.any((a) => a.isGraded)) {
+        final gradeData = GradeCalculationService.calculateCourseGrade(
+          courseAssessments,
+        );
+        totalGPA += gradeData['gpa'] as double;
+        coursesWithGrades++;
+      }
+    }
+
+    final averageGPA = coursesWithGrades > 0
+        ? totalGPA / coursesWithGrades
+        : 0.0;
+    final totalCourses = courseController.courses.length;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -53,19 +111,25 @@ class _GradeSummary extends StatelessWidget {
               children: [
                 Expanded(
                   child: _GPACard(
-                    title: 'Current GPA',
-                    value: '3.78',
-                    subtitle: 'Fall 2025',
-                    color: Colors.blue,
+                    title: 'Overall GPA',
+                    value: averageGPA.toStringAsFixed(2),
+                    subtitle: '$coursesWithGrades graded courses',
+                    color: averageGPA >= 3.5
+                        ? Colors.green
+                        : averageGPA >= 3.0
+                        ? Colors.blue
+                        : averageGPA >= 2.0
+                        ? Colors.orange
+                        : Colors.red,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: _GPACard(
-                    title: 'Cumulative GPA',
-                    value: '3.65',
-                    subtitle: 'Overall',
-                    color: Colors.green,
+                    title: 'Total Courses',
+                    value: totalCourses.toString(),
+                    subtitle: '$coursesWithGrades with grades',
+                    color: Colors.purple,
                   ),
                 ),
               ],
@@ -74,13 +138,28 @@ class _GradeSummary extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: _InfoItem(label: 'Credits Completed', value: '45'),
+                  child: _InfoItem(
+                    label: 'Total Assessments',
+                    value: assessmentController.assessments.length.toString(),
+                  ),
                 ),
                 Expanded(
-                  child: _InfoItem(label: 'Credits in Progress', value: '15'),
+                  child: _InfoItem(
+                    label: 'Completed',
+                    value: assessmentController.assessments
+                        .where((a) => a.isCompleted)
+                        .length
+                        .toString(),
+                  ),
                 ),
                 Expanded(
-                  child: _InfoItem(label: 'Total Credits', value: '120'),
+                  child: _InfoItem(
+                    label: 'Graded',
+                    value: assessmentController.assessments
+                        .where((a) => a.isGraded)
+                        .length
+                        .toString(),
+                  ),
                 ),
               ],
             ),
@@ -120,10 +199,7 @@ class _GPACard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             value,
-            style: AppTextStyles.cardTitle?.copyWith(
-              color: color,
-              fontSize: 28,
-            ),
+            style: AppTextStyles.cardTitle.copyWith(color: color, fontSize: 28),
           ),
           const SizedBox(height: 4),
           Text(subtitle, style: AppTextStyles.caption.copyWith(color: color)),
@@ -143,7 +219,7 @@ class _InfoItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(value, style: AppTextStyles.cardTitle?.copyWith(fontSize: 18)),
+        Text(value, style: AppTextStyles.cardTitle.copyWith(fontSize: 18)),
         const SizedBox(height: 4),
         Text(label, style: AppTextStyles.caption, textAlign: TextAlign.center),
       ],
@@ -152,82 +228,81 @@ class _InfoItem extends StatelessWidget {
 }
 
 class _CourseGrades extends StatelessWidget {
-  const _CourseGrades();
+  final CourseController courseController;
+  final AssessmentController assessmentController;
+
+  const _CourseGrades({
+    required this.courseController,
+    required this.assessmentController,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final grades = [
-      GradeData(
-        courseId: 'cs101',
-        courseName: 'Introduction to Computer Science',
-        courseCode: 'CS 101',
-        currentGrade: 'A',
-        percentage: 94.5,
-        credits: 3,
-        assignments: [
-          AssignmentGrade('Assignment 1', 95, 20),
-          AssignmentGrade('Assignment 2', 92, 20),
-          AssignmentGrade('Midterm Exam', 96, 30),
-          AssignmentGrade('Final Project', 93, 30),
-        ],
-      ),
-      GradeData(
-        courseId: 'math201',
-        courseName: 'Calculus II',
-        courseCode: 'MATH 201',
-        currentGrade: 'B+',
-        percentage: 87.2,
-        credits: 4,
-        assignments: [
-          AssignmentGrade('Problem Set 1', 85, 15),
-          AssignmentGrade('Problem Set 2', 88, 15),
-          AssignmentGrade('Midterm Exam', 82, 35),
-          AssignmentGrade('Final Exam', 90, 35),
-        ],
-      ),
-      GradeData(
-        courseId: 'phys301',
-        courseName: 'Physics III',
-        courseCode: 'PHYS 301',
-        currentGrade: 'A-',
-        percentage: 91.8,
-        credits: 3,
-        assignments: [
-          AssignmentGrade('Lab Report 1', 94, 25),
-          AssignmentGrade('Lab Report 2', 89, 25),
-          AssignmentGrade('Theory Exam', 92, 50),
-        ],
-      ),
-      GradeData(
-        courseId: 'eng101',
-        courseName: 'English Composition',
-        courseCode: 'ENG 101',
-        currentGrade: 'B',
-        percentage: 83.5,
-        credits: 3,
-        assignments: [
-          AssignmentGrade('Essay 1', 80, 25),
-          AssignmentGrade('Essay 2', 85, 25),
-          AssignmentGrade('Research Paper', 86, 35),
-          AssignmentGrade('Participation', 82, 15),
-        ],
-      ),
-      GradeData(
-        courseId: 'chem201',
-        courseName: 'Organic Chemistry',
-        courseCode: 'CHEM 201',
-        currentGrade: 'B+',
-        percentage: 88.7,
-        credits: 4,
-        assignments: [
-          AssignmentGrade('Quiz 1', 92, 10),
-          AssignmentGrade('Quiz 2', 85, 10),
-          AssignmentGrade('Lab Reports', 90, 30),
-          AssignmentGrade('Midterm', 87, 25),
-          AssignmentGrade('Final', 89, 25),
-        ],
-      ),
-    ];
+    // Build grade data from real courses and assessments
+    final grades = courseController.courses
+        .map((course) {
+          final courseAssessments = assessmentController.assessments
+              .where((a) => a.courseId == course.id)
+              .toList();
+
+          if (courseAssessments.isEmpty) {
+            return null; // Skip courses without assessments
+          }
+
+          // Calculate grade
+          final gradeData = GradeCalculationService.calculateCourseGrade(
+            courseAssessments,
+          );
+
+          final percentage = gradeData['percentage'] as double;
+          final letterGrade = gradeData['letterGrade'] as String;
+
+          // Get graded assessments for breakdown
+          final gradedAssessments = courseAssessments
+              .where((a) => a.isGraded)
+              .map(
+                (a) => AssignmentGrade(
+                  '${a.type.icon} ${a.title}',
+                  a.percentage ?? 0,
+                  a.type.weight,
+                ),
+              )
+              .toList();
+
+          return GradeData(
+            courseId: course.id,
+            courseName: course.name,
+            courseCode: course.name, // Using name as code for now
+            currentGrade: letterGrade,
+            percentage: percentage,
+            credits: 3, // Default credit hours, could be made configurable
+            assignments: gradedAssessments,
+          );
+        })
+        .whereType<GradeData>()
+        .toList(); // Filter out null values
+
+    if (grades.isEmpty) {
+      return Center(
+        child: Column(
+          children: [
+            Icon(Icons.grade_outlined, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'No grades yet',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Add assessments and grades to see them here',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -340,7 +415,10 @@ class _GradeCard extends StatelessWidget {
                 width: double.infinity,
                 child: OutlinedButton(
                   onPressed: () {
-                    Get.toNamed('/grade/${grade.courseId}');
+                    Get.to(
+                      () => CourseGradeDetailsPage(courseId: grade.courseId),
+                      transition: Transition.rightToLeft,
+                    );
                   },
                   child: const Text('View Details'),
                 ),

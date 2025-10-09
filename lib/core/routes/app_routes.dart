@@ -12,6 +12,7 @@ import '../../features/auth/pages/login_page.dart';
 import '../../features/auth/pages/register_page.dart';
 import '../../features/auth/pages/welcome_page.dart';
 import '../../features/auth/pages/forgot_password_page.dart';
+import '../../shared/widgets/notification_debug_page.dart';
 
 class AppRoutes {
   // Route names
@@ -45,6 +46,7 @@ class AppRoutes {
   static const String editProfile = '/profile/edit';
   static const String changePassword = '/profile/password';
   static const String notifications = '/profile/notifications';
+  static const String notificationDebug = '/debug/notifications';
 
   // Get all routes
   static List<GetPage> get routes => [
@@ -203,6 +205,14 @@ class AppRoutes {
       transition: Transition.rightToLeft,
       transitionDuration: const Duration(milliseconds: 300),
     ),
+
+    // Debug pages
+    GetPage(
+      name: notificationDebug,
+      page: () => const NotificationDebugPage(),
+      transition: Transition.rightToLeft,
+      transitionDuration: const Duration(milliseconds: 300),
+    ),
   ];
 
   // Navigation helper methods
@@ -242,6 +252,9 @@ class AppRoutes {
   static void toEditProfile() => Get.toNamed(editProfile);
   static void toChangePassword() => Get.toNamed(changePassword);
   static void toNotifications() => Get.toNamed(notifications);
+
+  // Debug navigation
+  static void toNotificationDebug() => Get.toNamed(notificationDebug);
 
   // Deep link handling
   static String? handleDeepLink(String link) {
