@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/course_controller.dart';
+import '../models/class_schedule_entry.dart';
 import '../../../shared/themes/app_text_styles.dart';
 
 class AddCoursePage extends StatelessWidget {
@@ -73,17 +74,6 @@ class AddCoursePage extends StatelessWidget {
                   required: true,
                   validator: controller.validateClassroom,
                 ),
-                const SizedBox(height: 16),
-
-                // Schedule
-                _buildTextField(
-                  controller: controller.scheduleController,
-                  label: 'Schedule',
-                  hint: 'e.g., Mon, Wed, Fri 10:00 AM',
-                  icon: Icons.schedule_outlined,
-                  required: true,
-                  validator: controller.validateSchedule,
-                ),
                 const SizedBox(height: 24),
 
                 // Class Schedule Section
@@ -103,40 +93,8 @@ class AddCoursePage extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
 
-                // Weekday Selector
-                Text(
-                  'Class Days',
-                  style: AppTextStyles.caption.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Obx(() => _buildWeekdaySelector(controller)),
-                const SizedBox(height: 16),
-
-                // Class Time Picker
-                Obx(
-                  () => _buildTimeField(
-                    label: 'Class Time',
-                    hint: controller.classTime == null
-                        ? 'Select class time'
-                        : _formatTime(controller.classTime!),
-                    icon: Icons.access_time_outlined,
-                    onTap: () => _selectClassTime(context, controller),
-                    value: controller.classTime,
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Reminder Minutes Dropdown
-                Text(
-                  'Reminder Before Class',
-                  style: AppTextStyles.caption.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Obx(() => _buildReminderDropdown(controller)),
+                // Schedule Section - Updated for multiple day-time combinations
+                _buildScheduleSection(context, controller),
                 const SizedBox(height: 24),
 
                 // Credits
@@ -523,100 +481,6 @@ class AddCoursePage extends StatelessWidget {
     }
   }
 
-  Widget _buildWeekdaySelector(CourseController controller) {
-    const weekdays = [
-      {'day': 'M', 'name': 'Monday', 'value': 1},
-      {'day': 'T', 'name': 'Tuesday', 'value': 2},
-      {'day': 'W', 'name': 'Wednesday', 'value': 3},
-      {'day': 'T', 'name': 'Thursday', 'value': 4},
-      {'day': 'F', 'name': 'Friday', 'value': 5},
-      {'day': 'S', 'name': 'Saturday', 'value': 6},
-      {'day': 'S', 'name': 'Sunday', 'value': 7},
-    ];
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: weekdays.map((weekday) {
-        final dayValue = weekday['value'] as int;
-        final isSelected = controller.selectedDays.contains(dayValue);
-
-        return FilterChip(
-          label: Text(weekday['day'] as String),
-          selected: isSelected,
-          onSelected: (selected) {
-            controller.toggleWeekday(dayValue);
-          },
-          selectedColor: Get.theme.colorScheme.primaryContainer,
-          checkmarkColor: Get.theme.colorScheme.primary,
-          labelStyle: TextStyle(
-            color: isSelected
-                ? Get.theme.colorScheme.primary
-                : Get.theme.colorScheme.onSurface,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-          ),
-          tooltip: weekday['name'] as String,
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildTimeField({
-    required String label,
-    required String hint,
-    required IconData icon,
-    required VoidCallback onTap,
-    TimeOfDay? value,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: label,
-          hintText: hint,
-          prefixIcon: Icon(icon),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          filled: true,
-        ),
-        child: Text(
-          value == null ? hint : _formatTime(value),
-          style: TextStyle(
-            color: value == null
-                ? Get.theme.colorScheme.onSurfaceVariant.withOpacity(0.5)
-                : Get.theme.colorScheme.onSurface,
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _formatTime(TimeOfDay time) {
-    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
-    final minute = time.minute.toString().padLeft(2, '0');
-    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
-    return '$hour:$minute $period';
-  }
-
-  void _selectClassTime(
-    BuildContext context,
-    CourseController controller,
-  ) async {
-    final TimeOfDay? picked = await showTimePicker(
-      context: context,
-      initialTime: controller.classTime ?? TimeOfDay.now(),
-      builder: (context, child) {
-        return Theme(
-          data: Get.theme.copyWith(colorScheme: Get.theme.colorScheme),
-          child: child!,
-        );
-      },
-    );
-
-    if (picked != null) {
-      controller.setClassTime(picked);
-    }
-  }
-
   Widget _buildReminderDropdown(CourseController controller) {
     return DropdownButtonFormField<int>(
       value: controller.reminderMinutes == 0
@@ -637,5 +501,352 @@ class AddCoursePage extends StatelessWidget {
         controller.setReminderMinutes(value ?? 0);
       },
     );
+  }
+
+  Widget _buildScheduleSection(
+    BuildContext context,
+    CourseController controller,
+  ) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade300),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.schedule,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Class Schedule',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                if (controller.scheduleEntries.length < 3)
+                  IconButton(
+                    onPressed: () =>
+                        _showAddScheduleDialog(context, controller),
+                    icon: const Icon(Icons.add),
+                    tooltip: 'Add class day',
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Add up to 3 class days with different times',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Schedule Entries List
+            Obx(() => _buildScheduleEntriesList(context, controller)),
+
+            const SizedBox(height: 16),
+
+            // Reminder Minutes
+            Text(
+              'Reminder Before Class',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 8),
+            Obx(() => _buildReminderDropdown(controller)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScheduleEntriesList(
+    BuildContext context,
+    CourseController controller,
+  ) {
+    if (controller.scheduleEntries.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              Icons.event_available,
+              size: 48,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'No class schedule added',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Add class days and times for notifications',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () => _showAddScheduleDialog(context, controller),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Class Day'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: controller.scheduleEntries.map((entry) {
+        return _buildScheduleEntryCard(context, controller, entry);
+      }).toList(),
+    );
+  }
+
+  Widget _buildScheduleEntryCard(
+    BuildContext context,
+    CourseController controller,
+    ClassScheduleEntry entry,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              entry.dayName,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              entry.formattedTime,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: () => _editScheduleEntry(context, controller, entry),
+            icon: const Icon(Icons.edit, size: 20),
+            tooltip: 'Edit time',
+          ),
+          IconButton(
+            onPressed: () => controller.removeScheduleEntry(entry.dayOfWeek),
+            icon: const Icon(Icons.delete, size: 20),
+            tooltip: 'Remove',
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddScheduleDialog(
+    BuildContext context,
+    CourseController controller,
+  ) {
+    final List<Map<String, dynamic>> availableDays =
+        [
+              {'day': 'Monday', 'value': 1},
+              {'day': 'Tuesday', 'value': 2},
+              {'day': 'Wednesday', 'value': 3},
+              {'day': 'Thursday', 'value': 4},
+              {'day': 'Friday', 'value': 5},
+              {'day': 'Saturday', 'value': 6},
+              {'day': 'Sunday', 'value': 7},
+            ]
+            .where((day) => !controller.hasScheduleForDay(day['value'] as int))
+            .toList();
+
+    if (availableDays.isEmpty) {
+      Get.snackbar(
+        'No Available Days',
+        'All days are already scheduled for this course',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    int? selectedDay;
+    TimeOfDay selectedTime = TimeOfDay.now();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Add Class Day'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Select Day',
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<int>(
+                value: selectedDay,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  filled: true,
+                  fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                ),
+                hint: const Text('Choose a day'),
+                items: availableDays.map((day) {
+                  return DropdownMenuItem<int>(
+                    value: day['value'] as int,
+                    child: Text(day['day'] as String),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    selectedDay = value;
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Select Time',
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: () async {
+                  final TimeOfDay? picked = await showTimePicker(
+                    context: context,
+                    initialTime: selectedTime,
+                  );
+                  if (picked != null) {
+                    setState(() {
+                      selectedTime = picked;
+                    });
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.outline.withOpacity(0.5),
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                    color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.access_time,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _formatTime(selectedTime),
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        Icons.keyboard_arrow_down,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: selectedDay == null
+                  ? null
+                  : () {
+                      controller.addScheduleEntry(selectedDay!, selectedTime);
+                      Navigator.of(context).pop();
+                    },
+              child: const Text('Add'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _editScheduleEntry(
+    BuildContext context,
+    CourseController controller,
+    ClassScheduleEntry entry,
+  ) async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: entry.time,
+      builder: (context, child) {
+        return Theme(
+          data: Get.theme.copyWith(colorScheme: Get.theme.colorScheme),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      controller.updateScheduleEntryTime(entry.dayOfWeek, picked);
+    }
+  }
+
+  String _formatTime(TimeOfDay time) {
+    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$hour:$minute $period';
   }
 }

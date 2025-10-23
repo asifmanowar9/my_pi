@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../models/course_model.dart';
+import '../models/class_schedule_entry.dart';
 import '../services/course_service.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../../shared/services/storage_service.dart';
@@ -57,25 +58,94 @@ class CourseController extends GetxController {
   DateTime? get startDate => _startDate.value;
   void setStartDate(DateTime? date) => _startDate.value = date;
 
-  // Schedule notification fields
-  final RxList<int> _selectedDays = <int>[].obs;
-  final Rx<TimeOfDay?> _classTime = Rx<TimeOfDay?>(null);
+  // Schedule notification fields - Multiple day-time combinations
+  final RxList<ClassScheduleEntry> _scheduleEntries = <ClassScheduleEntry>[].obs;
   final RxInt _reminderMinutes = 0.obs;
 
-  List<int> get selectedDays => _selectedDays;
-  TimeOfDay? get classTime => _classTime.value;
+  List<ClassScheduleEntry> get scheduleEntries => _scheduleEntries;
   int get reminderMinutes => _reminderMinutes.value;
 
-  void toggleWeekday(int day) {
-    if (_selectedDays.contains(day)) {
-      _selectedDays.remove(day);
-    } else {
-      _selectedDays.add(day);
+  // Backward compatibility getters
+  List<int> get selectedDays => _scheduleEntries.map((e) => e.dayOfWeek).toList();
+  TimeOfDay? get classTime => _scheduleEntries.isNotEmpty ? _scheduleEntries.first.time : null;
+
+  // Add a new schedule entry (day + time combination)
+  void addScheduleEntry(int dayOfWeek, TimeOfDay time) {
+    final entry = ClassScheduleEntry(dayOfWeek: dayOfWeek, time: time);
+    // Remove existing entry for the same day if it exists
+    _scheduleEntries.removeWhere((e) => e.dayOfWeek == dayOfWeek);
+    // Add the new entry
+    _scheduleEntries.add(entry);
+    _scheduleEntries.sort((a, b) => a.dayOfWeek.compareTo(b.dayOfWeek));
+    _updateScheduleController();
+  }
+
+  // Remove a schedule entry for a specific day
+  void removeScheduleEntry(int dayOfWeek) {
+    _scheduleEntries.removeWhere((e) => e.dayOfWeek == dayOfWeek);
+    _updateScheduleController();
+  }
+
+  // Update time for an existing day
+  void updateScheduleEntryTime(int dayOfWeek, TimeOfDay time) {
+    final index = _scheduleEntries.indexWhere((e) => e.dayOfWeek == dayOfWeek);
+    if (index != -1) {
+      _scheduleEntries[index] = ClassScheduleEntry(dayOfWeek: dayOfWeek, time: time);
+      _updateScheduleController();
     }
   }
 
-  void setClassTime(TimeOfDay? time) => _classTime.value = time;
+  // Check if a day has a schedule entry
+  bool hasScheduleForDay(int dayOfWeek) {
+    return _scheduleEntries.any((e) => e.dayOfWeek == dayOfWeek);
+  }
+
+  // Get time for a specific day
+  TimeOfDay? getTimeForDay(int dayOfWeek) {
+    final entry = _scheduleEntries.firstWhereOrNull((e) => e.dayOfWeek == dayOfWeek);
+    return entry?.time;
+  }
+
+  // Backward compatibility methods
+  void toggleWeekday(int day) {
+    if (hasScheduleForDay(day)) {
+      removeScheduleEntry(day);
+    } else {
+      // Add with default time (9:00 AM)
+      addScheduleEntry(day, const TimeOfDay(hour: 9, minute: 0));
+    }
+  }
+
+  void setClassTime(TimeOfDay? time) {
+    if (time != null && _scheduleEntries.isNotEmpty) {
+      // Update time for the first entry (backward compatibility)
+      updateScheduleEntryTime(_scheduleEntries.first.dayOfWeek, time);
+    }
+  }
+
   void setReminderMinutes(int minutes) => _reminderMinutes.value = minutes;
+
+  // Generate formatted schedule string from structured data
+  String _generateScheduleString() {
+    if (_scheduleEntries.isEmpty) {
+      return '';
+    }
+
+    // Sort entries by day
+    final sortedEntries = List<ClassScheduleEntry>.from(_scheduleEntries)
+      ..sort((a, b) => a.dayOfWeek.compareTo(b.dayOfWeek));
+
+    // Format each entry as "Day Time"
+    final scheduleStrings = sortedEntries.map((entry) => entry.toString()).toList();
+
+    // Join with semicolons for multiple entries
+    return scheduleStrings.join('; ');
+  }
+
+  // Update schedule controller with formatted string (for backward compatibility)
+  void _updateScheduleController() {
+    scheduleController.text = _generateScheduleString();
+  }
 
   // Color selection
   final Rx<Color?> _selectedColor = Rx<Color?>(null);
@@ -450,21 +520,22 @@ class CourseController extends GetxController {
     durationController.text = course.durationMonths?.toString() ?? '';
     _startDate.value = course.startDate;
 
-    // Set schedule notification fields
-    _selectedDays.value = course.scheduleDays != null
-        ? List<int>.from(course.scheduleDays!)
-        : [];
-    if (course.classTime != null && course.classTime!.isNotEmpty) {
+    // Set schedule notification fields from course data
+    _scheduleEntries.clear();
+    if (course.scheduleDays != null && course.classTime != null && course.classTime!.isNotEmpty) {
       try {
         final parts = course.classTime!.split(':');
         final hour = int.parse(parts[0]);
         final minute = int.parse(parts[1]);
-        _classTime.value = TimeOfDay(hour: hour, minute: minute);
+        final time = TimeOfDay(hour: hour, minute: minute);
+        
+        // For backward compatibility, apply the same time to all days
+        for (final day in course.scheduleDays!) {
+          _scheduleEntries.add(ClassScheduleEntry(dayOfWeek: day, time: time));
+        }
       } catch (e) {
-        _classTime.value = null;
+        print('Error parsing course schedule: $e');
       }
-    } else {
-      _classTime.value = null;
     }
     _reminderMinutes.value = course.reminderMinutes ?? 0;
 
@@ -500,8 +571,7 @@ class CourseController extends GetxController {
     durationController.clear();
     _startDate.value = null;
     _selectedColor.value = null;
-    _selectedDays.clear();
-    _classTime.value = null;
+    _scheduleEntries.clear();
     _reminderMinutes.value = 0;
     formKey.currentState?.reset();
   }
@@ -807,9 +877,8 @@ class CourseController extends GetxController {
   }
 
   String? validateSchedule(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Schedule is required';
-    }
+    // Schedule validation is now handled by structured fields
+    // This method is kept for backward compatibility but is no longer used
     return null;
   }
 
@@ -853,12 +922,16 @@ class CourseController extends GetxController {
       }
     }
 
-    // Convert TimeOfDay to "HH:mm" format
+    // Generate schedule data from multiple schedule entries
+    String scheduleString = _generateScheduleString();
+    List<int>? scheduleDays;
     String? classTimeStr;
-    if (_classTime.value != null) {
-      final hour = _classTime.value!.hour.toString().padLeft(2, '0');
-      final minute = _classTime.value!.minute.toString().padLeft(2, '0');
-      classTimeStr = '$hour:$minute';
+    
+    if (_scheduleEntries.isNotEmpty) {
+      scheduleDays = _scheduleEntries.map((e) => e.dayOfWeek).toList();
+      // For backward compatibility, use the first entry's time
+      final firstEntry = _scheduleEntries.first;
+      classTimeStr = firstEntry.time24Hour;
     }
 
     return CourseModel(
@@ -868,7 +941,7 @@ class CourseController extends GetxController {
       code: courseCode,
       teacherName: teacherController.text.trim(),
       classroom: classroomController.text.trim(),
-      schedule: scheduleController.text.trim(),
+      schedule: scheduleString,
       description: descriptionController.text.trim().isEmpty
           ? null
           : descriptionController.text.trim(),
@@ -883,9 +956,7 @@ class CourseController extends GetxController {
       startDate: _startDate.value,
       endDate: endDate,
       durationMonths: durationMonths,
-      scheduleDays: _selectedDays.isNotEmpty
-          ? List<int>.from(_selectedDays)
-          : null,
+      scheduleDays: scheduleDays,
       classTime: classTimeStr,
       reminderMinutes: _reminderMinutes.value > 0
           ? _reminderMinutes.value

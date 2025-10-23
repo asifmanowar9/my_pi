@@ -617,6 +617,7 @@ class ThemeController extends GetxController {
     _isDarkMode.value = !_isDarkMode.value;
     Get.changeThemeMode(theme);
     _saveThemeToStorage();
+    update(); // Notify GetBuilder widgets
 
     // Show feedback to user
     Get.snackbar(
@@ -636,6 +637,7 @@ class ThemeController extends GetxController {
       _isDarkMode.value = isDark;
       Get.changeThemeMode(theme);
       _saveThemeToStorage();
+      update(); // Notify GetBuilder widgets
     }
   }
 
