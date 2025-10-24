@@ -114,39 +114,64 @@ class AuthService extends BaseService {
   // Google Sign-In
   Future<UserModel?> signInWithGoogle() async {
     try {
+      debugPrint('🔄 Starting Google Sign-In process...');
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
       if (googleUser == null) {
+        debugPrint('ℹ️ Google Sign-In cancelled by user');
         return null; // User canceled the sign-in
       }
 
+      debugPrint('✅ Google account selected: ${googleUser.email}');
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
 
+      if (googleAuth.accessToken == null || googleAuth.idToken == null) {
+        debugPrint('❌ Failed to get Google authentication tokens');
+        throw const AuthException(
+          'Failed to get authentication tokens from Google',
+          'google-auth-tokens-failed',
+        );
+      }
+
+      debugPrint('✅ Google authentication tokens obtained');
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
+      debugPrint('🔄 Signing in with Firebase...');
       final authResult = await _auth.signInWithCredential(credential);
 
       if (authResult.user != null) {
+        debugPrint(
+          '✅ Firebase authentication successful: ${authResult.user!.email}',
+        );
         final userModel = UserModel.fromFirebaseUser(authResult.user!);
 
         // Create or update user in Firestore
         if (authResult.additionalUserInfo?.isNewUser == true) {
+          debugPrint('🆕 New user detected, creating Firestore document');
           await _createUserInFirestore(userModel);
         } else {
+          debugPrint('👤 Existing user detected, updating Firestore document');
           await _updateUserInFirestore(userModel);
         }
 
+        debugPrint('✅ Google Sign-In completed successfully');
         return userModel;
       }
-      return null;
+
+      debugPrint('❌ Firebase authentication failed - no user returned');
+      throw const AuthException(
+        'Firebase authentication failed',
+        'firebase-auth-failed',
+      );
     } on FirebaseAuthException catch (e) {
+      debugPrint('❌ Firebase Auth Exception: ${e.code} - ${e.message}');
       throw _handleAuthException(e);
     } catch (e) {
-      debugPrint('Google sign-in error: $e');
+      debugPrint('❌ Google sign-in error: $e');
       throw const AuthException(
         'Google sign-in failed. Please try again.',
         'google-signin-failed',

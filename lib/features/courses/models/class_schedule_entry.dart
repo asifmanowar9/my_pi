@@ -5,10 +5,7 @@ class ClassScheduleEntry {
   final int dayOfWeek; // 1 = Monday, 2 = Tuesday, ..., 7 = Sunday
   final TimeOfDay time;
 
-  ClassScheduleEntry({
-    required this.dayOfWeek,
-    required this.time,
-  });
+  ClassScheduleEntry({required this.dayOfWeek, required this.time});
 
   /// Get day name abbreviation
   String get dayName {
@@ -18,7 +15,15 @@ class ClassScheduleEntry {
 
   /// Get full day name
   String get fullDayName {
-    const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const dayNames = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
     return dayNames[dayOfWeek - 1];
   }
 
@@ -50,18 +55,12 @@ class ClassScheduleEntry {
 
   /// Convert to map for storage
   Map<String, dynamic> toMap() {
-    return {
-      'dayOfWeek': dayOfWeek,
-      'time': time24Hour,
-    };
+    return {'dayOfWeek': dayOfWeek, 'time': time24Hour};
   }
 
   /// Create from map
   static ClassScheduleEntry fromMap(Map<String, dynamic> map) {
-    return fromTimeString(
-      map['dayOfWeek'] as int,
-      map['time'] as String,
-    );
+    return fromTimeString(map['dayOfWeek'] as int, map['time'] as String);
   }
 
   /// Display string for UI

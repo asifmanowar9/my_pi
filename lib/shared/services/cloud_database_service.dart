@@ -20,6 +20,9 @@ class CloudDatabaseService {
   CollectionReference get _assignmentsCollection =>
       _firestore.collection('users').doc(_userId).collection('assignments');
 
+  CollectionReference get _assessmentsCollection =>
+      _firestore.collection('users').doc(_userId).collection('assessments');
+
   CollectionReference get _gradesCollection =>
       _firestore.collection('users').doc(_userId).collection('grades');
 
@@ -40,6 +43,10 @@ class CloudDatabaseService {
   // Create course
   Future<String> createCourse(Map<String, dynamic> courseData) async {
     try {
+      print('🔥 CloudDatabaseService: Creating course in Firebase');
+      print('📝 Course data: ${courseData.keys.toList()}');
+      print('👤 User ID: $_userId');
+
       final docRef = await _coursesCollection.add({
         ...courseData,
         'createdAt': FieldValue.serverTimestamp(),
@@ -47,8 +54,11 @@ class CloudDatabaseService {
         'userId': _userId,
         'syncStatus': 'synced',
       });
+
+      print('✅ Course created successfully with ID: ${docRef.id}');
       return docRef.id;
     } catch (e) {
+      print('❌ Failed to create course in Firebase: $e');
       throw Exception('Failed to create course: $e');
     }
   }
@@ -197,6 +207,69 @@ class CloudDatabaseService {
       await _gradesCollection.doc(gradeId).delete();
     } catch (e) {
       throw Exception('Failed to delete grade: $e');
+    }
+  }
+
+  // 2. CRUD operations for assessments with user isolation
+
+  // Create assessment
+  Future<String> createAssessment(Map<String, dynamic> assessmentData) async {
+    try {
+      print('🔥 CloudDatabaseService: Creating assessment in Firebase');
+      print('📝 Assessment data: ${assessmentData.keys.toList()}');
+      print('👤 User ID: $_userId');
+
+      final docRef = await _assessmentsCollection.add({
+        ...assessmentData,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'userId': _userId,
+        'syncStatus': 'synced',
+      });
+
+      print('✅ Assessment created successfully with ID: ${docRef.id}');
+      return docRef.id;
+    } catch (e) {
+      print('❌ Failed to create assessment in Firebase: $e');
+      throw Exception('Failed to create assessment: $e');
+    }
+  }
+
+  // Read assessment
+  Future<Map<String, dynamic>?> getAssessment(String assessmentId) async {
+    try {
+      final doc = await _assessmentsCollection.doc(assessmentId).get();
+      if (doc.exists) {
+        return {'id': doc.id, ...doc.data() as Map<String, dynamic>};
+      }
+      return null;
+    } catch (e) {
+      throw Exception('Failed to get assessment: $e');
+    }
+  }
+
+  // Update assessment
+  Future<void> updateAssessment(
+    String assessmentId,
+    Map<String, dynamic> updates,
+  ) async {
+    try {
+      await _assessmentsCollection.doc(assessmentId).update({
+        ...updates,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'syncStatus': 'synced',
+      });
+    } catch (e) {
+      throw Exception('Failed to update assessment: $e');
+    }
+  }
+
+  // Delete assessment
+  Future<void> deleteAssessment(String assessmentId) async {
+    try {
+      await _assessmentsCollection.doc(assessmentId).delete();
+    } catch (e) {
+      throw Exception('Failed to delete assessment: $e');
     }
   }
 

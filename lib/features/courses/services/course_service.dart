@@ -77,7 +77,15 @@ class CourseService extends GetxService {
       if (_safeAuthController?.isAuthenticated == true &&
           _cloudService != null) {
         try {
+          print('☁️ CourseService: Attempting to sync course to cloud');
+          print(
+            '🔐 User authenticated: ${_safeAuthController?.isAuthenticated}',
+          );
+          print('🌩️ Cloud service available: ${_cloudService != null}');
+
           await _cloudService!.createCourse(courseData);
+          print('✅ Course synced to cloud successfully');
+
           // Update local record to mark as synced
           await db.update(
             'courses',
@@ -85,10 +93,15 @@ class CourseService extends GetxService {
             where: 'id = ?',
             whereArgs: [course.id],
           );
+          print('✅ Local course marked as synced');
         } catch (e) {
-          print('Cloud backup failed: $e');
+          print('❌ Cloud backup failed: $e');
           // Continue without cloud backup
         }
+      } else {
+        print(
+          '⚠️ Skipping cloud sync - Auth: ${_safeAuthController?.isAuthenticated}, Cloud: ${_cloudService != null}',
+        );
       }
 
       return course.id;
@@ -258,12 +271,17 @@ class CourseService extends GetxService {
   /// Syncs unsynced local courses to cloud
   Future<void> syncToCloud() async {
     if (_safeAuthController?.isAuthenticated != true || _cloudService == null) {
+      print(
+        '⚠️ Sync skipped - Auth: ${_safeAuthController?.isAuthenticated}, Cloud: ${_cloudService != null}',
+      );
       return;
     }
 
     try {
+      print('🔄 Starting sync to cloud...');
       final db = await _databaseHelper.database;
       final userId = _currentUserId;
+      print('👤 User ID: $userId');
 
       String whereClause = 'is_synced = ?';
       List<dynamic> whereArgs = [0];
@@ -273,15 +291,23 @@ class CourseService extends GetxService {
         whereArgs.add(userId);
       }
 
+      print('📊 Query: WHERE $whereClause WITH args: $whereArgs');
+
       final List<Map<String, dynamic>> unsyncedCourses = await db.query(
         'courses',
         where: whereClause,
         whereArgs: whereArgs,
       );
 
+      print('📝 Found ${unsyncedCourses.length} unsynced courses');
+
       for (final courseData in unsyncedCourses) {
         try {
+          print(
+            '⬆️ Syncing course: ${courseData['name']} (${courseData['id']})',
+          );
           await _cloudService!.createCourse(courseData);
+
           // Mark as synced
           await db.update(
             'courses',
@@ -291,11 +317,15 @@ class CourseService extends GetxService {
                 ? [courseData['id'], userId]
                 : [courseData['id']],
           );
+          print('✅ Course synced and marked: ${courseData['name']}');
         } catch (e) {
-          print('Failed to sync course ${courseData['id']}: $e');
+          print('❌ Failed to sync course ${courseData['id']}: $e');
         }
       }
+
+      print('🎉 Sync to cloud completed');
     } catch (e) {
+      print('❌ Failed to sync courses to cloud: $e');
       throw Exception('Failed to sync courses to cloud: $e');
     }
   }

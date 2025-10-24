@@ -6,29 +6,26 @@ service cloud.firestore {
     // Allow authenticated users to read and write their own user document
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow authenticated users to read and write their own nested collections
+      match /courses/{courseId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      match /assignments/{assignmentId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      match /grades/{gradeId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      match /assessments/{assessmentId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
     
-    // Allow authenticated users to read and write their own courses
-    match /courses/{courseId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    // Allow authenticated users to read and write their own assessments
-    match /assessments/{assessmentId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    // Allow authenticated users to read and write their own assignments
-    match /assignments/{assignmentId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    // Allow authenticated users to read and write their own grades
-    match /grades/{gradeId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    // Allow authenticated users to read and write notifications
+    // Allow authenticated users to read and write notifications (global collection)
     match /notifications/{notificationId} {
       allow read, write: if request.auth != null;
     }

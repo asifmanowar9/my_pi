@@ -15,6 +15,7 @@ import 'core/database/database_helper_clean.dart' as DatabaseHelperClean;
 import 'features/auth/services/auth_service.dart';
 import 'features/auth/controllers/auth_controller.dart';
 import 'features/courses/services/course_service.dart';
+import 'features/courses/controllers/assessment_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -82,6 +83,9 @@ Future<void> _initializeServices() async {
 
     // Initialize CourseService
     Get.put(CourseService(), permanent: true);
+
+    // Initialize AssessmentController for global access
+    Get.put(AssessmentController(), permanent: true);
 
     // Initialize Theme Controller
     Get.put(ThemeController(), permanent: true);

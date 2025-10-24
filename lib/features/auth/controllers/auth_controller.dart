@@ -5,6 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 import '../../../core/routes.dart';
 import '../../../core/database/database_helper_clean.dart';
+import '../../courses/services/course_service.dart';
+import '../../courses/controllers/assessment_controller.dart';
 
 class AuthController extends GetxController {
   static AuthController get instance => Get.find();
@@ -92,6 +94,15 @@ class AuthController extends GetxController {
       // Also save to database if user was already logged in
       if (_user.value != null) {
         _saveUserToDatabase(_user.value!);
+
+        // Trigger sync for existing authenticated user with delay
+        print('🔄 User already authenticated, scheduling data sync...');
+        _enableCloudBackup();
+
+        // Schedule sync after all services are initialized
+        Future.delayed(const Duration(seconds: 2), () {
+          _syncUnsyncedDataToCloud();
+        });
       }
     }
   }
@@ -109,8 +120,53 @@ class AuthController extends GetxController {
 
       await dbHelper.insertOrUpdateUser(userData);
       print('✅ User saved to local database: ${firebaseUser.email}');
+
+      // Migrate any existing anonymous data to this user
+      await _migrateAnonymousDataToUser(firebaseUser.uid);
     } catch (e) {
       print('❌ Error saving user to database: $e');
+    }
+  }
+
+  // Migrate existing anonymous data to the authenticated user
+  Future<void> _migrateAnonymousDataToUser(String userId) async {
+    try {
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+
+      // Check if there are any courses without user_id (anonymous data)
+      final anonymousCourses = await db.query(
+        'courses',
+        where: 'user_id IS NULL OR user_id = ""',
+      );
+
+      if (anonymousCourses.isNotEmpty) {
+        print(
+          '🔄 Migrating ${anonymousCourses.length} anonymous courses to user: $userId',
+        );
+
+        // Update courses to associate with the authenticated user
+        await db.update('courses', {
+          'user_id': userId,
+          'updated_at': DateTime.now().toIso8601String(),
+        }, where: 'user_id IS NULL OR user_id = ""');
+
+        // Also migrate any associated assignments and assessments
+        for (final course in anonymousCourses) {
+          final courseId = course['id'] as String;
+
+          // Note: assignments and assessments are linked by course_id,
+          // so they automatically become associated with the user through the course
+          print('  ✅ Migrated course: ${course['name']} (${course['id']})');
+        }
+
+        print('✅ Anonymous data migration completed');
+      } else {
+        print('ℹ️ No anonymous data to migrate');
+      }
+    } catch (e) {
+      print('❌ Error migrating anonymous data: $e');
+      // Don't throw - this is not critical, user can still use the app
     }
   }
 
@@ -131,6 +187,9 @@ class AuthController extends GetxController {
       if (userModel != null) {
         // 8. Cloud backup enablement after successful login
         await _enableCloudBackup();
+
+        // 9. Sync unsynced data to cloud
+        await _syncUnsyncedDataToCloud();
 
         // 7. Navigation handling after authentication
         _navigateAfterAuth();
@@ -153,6 +212,7 @@ class AuthController extends GetxController {
     _clearError();
 
     try {
+      print('🔄 Starting registration...');
       final userModel = await _authService.registerWithEmailAndPassword(
         email: emailController.text.trim(),
         password: passwordController.text,
@@ -161,15 +221,27 @@ class AuthController extends GetxController {
       );
 
       if (userModel != null) {
+        print('✅ Registration successful: ${userModel.email}');
+
         // 8. Cloud backup enablement after successful login
         await _enableCloudBackup();
+
+        // 9. Sync unsynced data to cloud
+        await _syncUnsyncedDataToCloud();
 
         // 7. Navigation handling after authentication
         _navigateAfterAuth();
 
-        _showSuccessMessage('Account created successfully!');
+        // Show success message after a brief delay to ensure UI is ready
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _showSuccessMessage('Account created successfully!');
+        });
+      } else {
+        print('❌ Registration returned null user');
+        _handleError('Registration failed - please try again');
       }
     } catch (e) {
+      print('❌ Registration error: $e');
       // 4. Error handling with user-friendly messages
       _handleError(e);
     } finally {
@@ -183,18 +255,31 @@ class AuthController extends GetxController {
     _clearError();
 
     try {
+      print('🔄 Starting Google Sign-In...');
       final userModel = await _authService.signInWithGoogle();
 
       if (userModel != null) {
+        print('✅ Google Sign-In successful: ${userModel.email}');
+
         // 8. Cloud backup enablement after successful login
         await _enableCloudBackup();
+
+        // 9. Sync unsynced data to cloud
+        await _syncUnsyncedDataToCloud();
 
         // 7. Navigation handling after authentication
         _navigateAfterAuth();
 
-        _showSuccessMessage('Signed in with Google successfully!');
+        // Show success message after a brief delay to ensure UI is ready
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _showSuccessMessage('Signed in with Google successfully!');
+        });
+      } else {
+        print('❌ Google Sign-In returned null user');
+        _handleError('Google Sign-In was cancelled or failed');
       }
     } catch (e) {
+      print('❌ Google Sign-In error: $e');
       // 4. Error handling with user-friendly messages
       _handleError(e);
     } finally {
@@ -432,7 +517,33 @@ class AuthController extends GetxController {
 
   // 7. Navigation handling after authentication
   void _navigateAfterAuth() {
-    Get.offAllNamed(Routes.HOME);
+    try {
+      // Clear any errors before navigation
+      _clearError();
+      print('🔄 Navigating to main screen...');
+
+      // Use a delayed navigation to ensure the context is ready
+      Future.delayed(const Duration(milliseconds: 100), () {
+        try {
+          // Navigate to main scaffold which contains the home screen
+          Get.offAllNamed('/main');
+          print('✅ Navigation to main screen completed');
+        } catch (e) {
+          print('❌ Navigation error: $e');
+          // Fallback: try direct navigation to splash and let it redirect
+          try {
+            Get.offAllNamed('/splash');
+            print('✅ Fallback navigation to splash successful');
+          } catch (fallbackError) {
+            print('❌ Fallback navigation failed: $fallbackError');
+            _handleError('Navigation failed. Please restart the app.');
+          }
+        }
+      });
+    } catch (e) {
+      print('❌ Navigation setup error: $e');
+      _handleError('Navigation failed: ${e.toString()}');
+    }
   }
 
   // 8. Cloud backup enablement after successful login
@@ -443,6 +554,38 @@ class AuthController extends GetxController {
       debugPrint('Cloud backup enabled for user: ${user?.uid}');
     } catch (e) {
       debugPrint('Failed to enable cloud backup: $e');
+    }
+  }
+
+  /// Sync unsynced data to cloud after authentication
+  Future<void> _syncUnsyncedDataToCloud() async {
+    try {
+      print('🔄 Starting sync of unsynced data to cloud...');
+
+      // Get and sync unsynced courses
+      if (Get.isRegistered<CourseService>()) {
+        final courseService = Get.find<CourseService>();
+        print('📚 CourseService found, triggering sync...');
+        await courseService.syncToCloud();
+        print('✅ Unsynced courses sync completed');
+      } else {
+        print('⚠️ CourseService not registered, skipping course sync');
+      }
+
+      // Get and sync unsynced assessments
+      if (Get.isRegistered<AssessmentController>()) {
+        final assessmentController = Get.find<AssessmentController>();
+        print('📋 AssessmentController found, triggering sync...');
+        await assessmentController.syncUnsyncedAssessments();
+        print('✅ Unsynced assessments sync completed');
+      } else {
+        print(
+          '⚠️ AssessmentController not registered, skipping assessment sync',
+        );
+      }
+    } catch (e) {
+      print('⚠️ Failed to sync unsynced data to cloud: $e');
+      // Don't throw error as this is a background operation
     }
   }
 

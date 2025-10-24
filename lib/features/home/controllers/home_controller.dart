@@ -199,23 +199,21 @@ class HomeController extends GetxController {
       final db = await _databaseHelper.database;
       final userId = _currentUserId;
       final today = DateTime.now();
-      final startOfToday = DateTime(
-        today.year,
-        today.month,
-        today.day,
-      ).toIso8601String();
-      final dayOfWeek = [
-        'Monday',
-        'Tuesday',
-        'Wednesday',
-        'Thursday',
-        'Friday',
-        'Saturday',
-        'Sunday',
-      ][today.weekday - 1];
+
+      // Map day of week to abbreviation used in schedule format
+      final dayAbbreviations = [
+        'Mon', // Monday = 1
+        'Tue', // Tuesday = 2
+        'Wed', // Wednesday = 3
+        'Thu', // Thursday = 4
+        'Fri', // Friday = 5
+        'Sat', // Saturday = 6
+        'Sun', // Sunday = 7
+      ];
+      final todayAbbr = dayAbbreviations[today.weekday - 1];
 
       print('=== Loading Today\'s Schedule ===');
-      print('Day of week: $dayOfWeek');
+      print('Day of week: ${today.weekday} ($todayAbbr)');
       print('User ID: ${userId.isEmpty ? "EMPTY" : userId}');
 
       // Debug: Check all courses
@@ -229,73 +227,56 @@ class HomeController extends GetxController {
 
       List<Map<String, dynamic>> result;
 
-      // First, try to get courses that match today's schedule
+      // Get courses that have classes scheduled for today
       if (userId.isEmpty) {
         result = await db.rawQuery(
           '''
           SELECT name, teacher_name, classroom, schedule
           FROM courses
-          WHERE schedule LIKE ?
+          WHERE schedule LIKE ? OR schedule LIKE ?
           ORDER BY schedule
           LIMIT 10
           ''',
-          ['%$dayOfWeek%'],
+          ['%$todayAbbr %', '%$todayAbbr;%'],
         );
       } else {
         result = await db.rawQuery(
           '''
           SELECT name, teacher_name, classroom, schedule
           FROM courses
-          WHERE user_id = ? AND schedule LIKE ?
+          WHERE user_id = ? AND (schedule LIKE ? OR schedule LIKE ?)
           ORDER BY schedule
           LIMIT 10
           ''',
-          [userId, '%$dayOfWeek%'],
+          [userId, '%$todayAbbr %', '%$todayAbbr;%'],
         );
       }
 
-      print('Query result: ${result.length} courses for $dayOfWeek');
+      print('Query result: ${result.length} courses for $todayAbbr');
 
-      // If no courses found with proper schedule format, show all courses with assessments due today
-      if (result.isEmpty) {
-        print('No courses found with schedule matching $dayOfWeek');
-        print('Checking for courses with assessments due today...');
-
-        if (userId.isEmpty) {
-          result = await db.rawQuery(
-            '''
-            SELECT DISTINCT c.name, c.teacher_name, c.classroom, c.schedule
-            FROM courses c
-            INNER JOIN assessments a ON c.id = a.course_id
-            WHERE DATE(a.due_date) = DATE(?)
-            ORDER BY a.due_date
-            LIMIT 10
-            ''',
-            [startOfToday],
-          );
-        } else {
-          result = await db.rawQuery(
-            '''
-            SELECT DISTINCT c.name, c.teacher_name, c.classroom, c.schedule
-            FROM courses c
-            INNER JOIN assessments a ON c.id = a.course_id
-            WHERE c.user_id = ? AND DATE(a.due_date) = DATE(?)
-            ORDER BY a.due_date
-            LIMIT 10
-            ''',
-            [userId, startOfToday],
-          );
-        }
-        print('Found ${result.length} courses with assessments due today');
-      }
-
-      // Parse schedule to extract time
+      // Parse schedule to extract time for today
       todaysSchedule.value = result.map((course) {
         final schedule = course['schedule'] as String? ?? '';
-        final timeMatch = RegExp(
-          r'(\d{1,2}:\d{2}\s*[AP]M)',
-        ).firstMatch(schedule);
-        final time = timeMatch?.group(1) ?? 'TBA';
+
+        // Extract time for today's day from the schedule
+        // Schedule format: "Mon 10:00 AM; Wed 2:00 PM" or "Mon 10:00 AM"
+        String? todayTime;
+
+        // Split by semicolon to get individual day-time entries
+        final entries = schedule.split(';');
+        for (final entry in entries) {
+          final trimmedEntry = entry.trim();
+          if (trimmedEntry.startsWith(todayAbbr)) {
+            // Extract time part after the day abbreviation
+            final timeMatch = RegExp(
+              '$todayAbbr\\s+(\\d{1,2}:\\d{2}\\s*[AP]M)',
+            ).firstMatch(trimmedEntry);
+            todayTime = timeMatch?.group(1);
+            break;
+          }
+        }
+
+        final time = todayTime ?? 'TBA';
 
         print('Parsed: ${course['name']} at $time');
 
@@ -310,6 +291,12 @@ class HomeController extends GetxController {
       todaysSchedule.sort((a, b) {
         final timeA = a['time'] as String;
         final timeB = b['time'] as String;
+
+        // If either time is 'TBA', put it at the end
+        if (timeA == 'TBA' && timeB != 'TBA') return 1;
+        if (timeB == 'TBA' && timeA != 'TBA') return -1;
+        if (timeA == 'TBA' && timeB == 'TBA') return 0;
+
         return timeA.compareTo(timeB);
       });
 

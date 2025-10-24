@@ -2,10 +2,36 @@ import 'package:get/get.dart';
 import '../models/assessment_model.dart';
 import '../../../core/database/database_helper_clean.dart';
 import '../../../shared/services/notification_service.dart';
+import '../../../shared/services/cloud_database_service.dart';
+import '../../auth/controllers/auth_controller.dart';
 
 class AssessmentController extends GetxController {
   final _dbHelper = DatabaseHelper();
   final _notificationService = Get.find<NotificationService>();
+  CloudDatabaseService? _cloudService;
+  AuthController? _authController;
+
+  @override
+  void onInit() {
+    super.onInit();
+    _initializeCloudService();
+  }
+
+  void _initializeCloudService() {
+    try {
+      if (Get.isRegistered<CloudDatabaseService>()) {
+        _cloudService = Get.find<CloudDatabaseService>();
+      }
+      if (Get.isRegistered<AuthController>()) {
+        _authController = Get.find<AuthController>();
+      }
+    } catch (e) {
+      print('Cloud service not available: $e');
+    }
+  }
+
+  // Helper method to check if user is authenticated
+  bool get _isAuthenticated => _authController?.isAuthenticated ?? false;
 
   // Observable list of assessments
   final RxList<AssessmentModel> assessments = <AssessmentModel>[].obs;
@@ -68,7 +94,19 @@ class AssessmentController extends GetxController {
   // Add new assessment
   Future<bool> addAssessment(AssessmentModel assessment) async {
     try {
+      // Save to local database
       await _dbHelper.insertAssessment(assessment.toMap());
+
+      // Optional cloud backup for authenticated users
+      if (_isAuthenticated && _cloudService != null) {
+        try {
+          await _cloudService!.createAssessment(assessment.toMap());
+          print('✅ Assessment synced to Firebase: ${assessment.title}');
+        } catch (e) {
+          print('❌ Failed to sync assessment to Firebase: $e');
+          // Continue without cloud backup
+        }
+      }
 
       // Schedule reminder if due date and reminder minutes are set
       if (assessment.dueDate != null && assessment.reminderMinutes != null) {
@@ -98,7 +136,22 @@ class AssessmentController extends GetxController {
   // Update assessment
   Future<bool> updateAssessment(AssessmentModel assessment) async {
     try {
+      // Update in local database
       await _dbHelper.updateAssessment(assessment.id, assessment.toMap());
+
+      // Optional cloud sync for authenticated users
+      if (_isAuthenticated && _cloudService != null) {
+        try {
+          await _cloudService!.updateAssessment(
+            assessment.id,
+            assessment.toMap(),
+          );
+          print('✅ Assessment updated in Firebase: ${assessment.title}');
+        } catch (e) {
+          print('❌ Failed to sync assessment update to Firebase: $e');
+          // Continue without cloud sync
+        }
+      }
 
       // Update reminder
       await _notificationService.cancelNotification(assessment.id.hashCode);
@@ -200,7 +253,21 @@ class AssessmentController extends GetxController {
   Future<bool> deleteAssessment(String assessmentId) async {
     try {
       await _notificationService.cancelNotification(assessmentId.hashCode);
+
+      // Delete from local database
       await _dbHelper.deleteAssessment(assessmentId);
+
+      // Optional cloud deletion for authenticated users
+      if (_isAuthenticated && _cloudService != null) {
+        try {
+          await _cloudService!.deleteAssessment(assessmentId);
+          print('✅ Assessment deleted from Firebase: $assessmentId');
+        } catch (e) {
+          print('❌ Failed to delete assessment from Firebase: $e');
+          // Continue without cloud deletion
+        }
+      }
+
       assessments.removeWhere((a) => a.id == assessmentId);
 
       Get.snackbar(
@@ -278,6 +345,54 @@ class AssessmentController extends GetxController {
       }
     } catch (e) {
       print('Error rescheduling reminders: $e');
+    }
+  }
+
+  // Sync unsynced assessments to Firebase
+  Future<void> syncUnsyncedAssessments() async {
+    if (!_isAuthenticated || _cloudService == null) {
+      print(
+        '📍 Cannot sync assessments: User not authenticated or cloud service unavailable',
+      );
+      return;
+    }
+
+    try {
+      print('🔄 Starting assessment sync to Firebase...');
+
+      // Get all assessments from local database
+      final localAssessments = await _dbHelper.getAllAssessments();
+      print('📊 Found ${localAssessments.length} local assessments to sync');
+
+      int syncedCount = 0;
+      for (final assessmentData in localAssessments) {
+        try {
+          await _cloudService!.createAssessment(assessmentData);
+          syncedCount++;
+          print('✅ Synced assessment: ${assessmentData['title']}');
+        } catch (e) {
+          print('❌ Failed to sync assessment ${assessmentData['id']}: $e');
+        }
+      }
+
+      print(
+        '🎉 Assessment sync complete: $syncedCount/${localAssessments.length} assessments synced',
+      );
+
+      if (syncedCount > 0) {
+        Get.snackbar(
+          'Sync Complete',
+          'Synced $syncedCount assessments to cloud',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+    } catch (e) {
+      print('❌ Failed to sync assessments to Firebase: $e');
+      Get.snackbar(
+        'Sync Error',
+        'Failed to sync assessments: $e',
+        snackPosition: SnackPosition.BOTTOM,
+      );
     }
   }
 }

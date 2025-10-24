@@ -308,7 +308,8 @@ class CourseForm extends StatelessWidget {
                 const Spacer(),
                 if (controller.scheduleEntries.length < 3)
                   IconButton(
-                    onPressed: () => _showAddScheduleDialog(context, controller),
+                    onPressed: () =>
+                        _showAddScheduleDialog(context, controller),
                     icon: const Icon(Icons.add),
                     tooltip: 'Add class day',
                   ),
@@ -331,9 +332,9 @@ class CourseForm extends StatelessWidget {
             // Reminder Minutes
             Text(
               'Reminder Before Class',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w500,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 8),
             Obx(() => _buildReminderDropdown(context, controller)),
@@ -343,16 +344,19 @@ class CourseForm extends StatelessWidget {
     );
   }
 
-
-
-  Widget _buildReminderDropdown(BuildContext context, CourseController controller) {
+  Widget _buildReminderDropdown(
+    BuildContext context,
+    CourseController controller,
+  ) {
     return DropdownButtonFormField<int>(
       value: controller.reminderMinutes == 0 ? 10 : controller.reminderMinutes,
       decoration: InputDecoration(
         prefixIcon: const Icon(Icons.notifications_outlined),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         filled: true,
-        fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+        fillColor: Theme.of(
+          context,
+        ).colorScheme.surfaceVariant.withOpacity(0.5),
       ),
       items: const [
         DropdownMenuItem(value: 10, child: Text('10 minutes before')),
@@ -372,8 +376,6 @@ class CourseForm extends StatelessWidget {
     final period = time.period == DayPeriod.am ? 'AM' : 'PM';
     return '$hour:$minute $period';
   }
-
-
 
   void _showColorPicker(BuildContext context) {
     final List<Color> predefinedColors = [
@@ -489,7 +491,9 @@ class CourseForm extends StatelessWidget {
             Text(
               'Add class days and times for notifications',
               style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurfaceVariant.withOpacity(0.7),
                 fontSize: 14,
               ),
             ),
@@ -547,10 +551,7 @@ class CourseForm extends StatelessWidget {
           Expanded(
             child: Text(
               entry.formattedTime,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
             ),
           ),
           IconButton(
@@ -572,15 +573,18 @@ class CourseForm extends StatelessWidget {
     BuildContext context,
     CourseController controller,
   ) {
-    final List<Map<String, dynamic>> availableDays = [
-      {'day': 'Monday', 'value': 1},
-      {'day': 'Tuesday', 'value': 2},
-      {'day': 'Wednesday', 'value': 3},
-      {'day': 'Thursday', 'value': 4},
-      {'day': 'Friday', 'value': 5},
-      {'day': 'Saturday', 'value': 6},
-      {'day': 'Sunday', 'value': 7},
-    ].where((day) => !controller.hasScheduleForDay(day['value'] as int)).toList();
+    final List<Map<String, dynamic>> availableDays =
+        [
+              {'day': 'Monday', 'value': 1},
+              {'day': 'Tuesday', 'value': 2},
+              {'day': 'Wednesday', 'value': 3},
+              {'day': 'Thursday', 'value': 4},
+              {'day': 'Friday', 'value': 5},
+              {'day': 'Saturday', 'value': 6},
+              {'day': 'Sunday', 'value': 7},
+            ]
+            .where((day) => !controller.hasScheduleForDay(day['value'] as int))
+            .toList();
 
     if (availableDays.isEmpty) {
       Get.snackbar(
@@ -611,9 +615,13 @@ class CourseForm extends StatelessWidget {
               DropdownButtonFormField<int>(
                 value: selectedDay,
                 decoration: InputDecoration(
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   filled: true,
-                  fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                  fillColor: Theme.of(
+                    context,
+                  ).colorScheme.surfaceVariant.withOpacity(0.5),
                 ),
                 hint: const Text('Choose a day'),
                 items: availableDays.map((day) {
@@ -650,10 +658,14 @@ class CourseForm extends StatelessWidget {
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     border: Border.all(
-                      color: Theme.of(context).colorScheme.outline.withOpacity(0.5),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.outline.withOpacity(0.5),
                     ),
                     borderRadius: BorderRadius.circular(8),
-                    color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceVariant.withOpacity(0.5),
                   ),
                   child: Row(
                     children: [
