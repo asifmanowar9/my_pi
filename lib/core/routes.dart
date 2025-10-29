@@ -13,6 +13,7 @@ import '../features/debug/pages/database_viewer_page.dart';
 import '../features/courses/pages/courses_page.dart';
 import '../features/courses/pages/course_detail_page.dart';
 import '../features/home/home_screen.dart';
+import '../features/profile/pages/edit_profile_page.dart';
 // import '../features/assignments/pages/assignments_page.dart';
 // import '../features/grades/pages/grades_page.dart';
 
@@ -24,6 +25,7 @@ class Routes {
   static const String WELCOME = '/welcome';
   static const String HOME = '/home';
   static const String PROFILE = '/profile';
+  static const String PROFILE_EDIT = '/profile/edit';
   static const String COURSES = '/courses';
   static const String COURSE_DETAIL = '/course-detail';
   static const String ASSIGNMENTS = '/assignments';
@@ -42,6 +44,7 @@ class AppRoutes {
   static const String welcome = Routes.WELCOME;
   static const String home = Routes.HOME;
   static const String profile = Routes.PROFILE;
+  static const String profileEdit = Routes.PROFILE_EDIT;
   static const String courses = Routes.COURSES;
   static const String courseDetail = Routes.COURSE_DETAIL;
   static const String assignments = Routes.ASSIGNMENTS;
@@ -78,6 +81,11 @@ class AppRoutes {
       name: Routes.HOME,
       page: () => const HomeScreen(),
       transition: Transition.fadeIn,
+    ),
+    GetPage(
+      name: Routes.PROFILE_EDIT,
+      page: () => const EditProfilePage(),
+      transition: Transition.rightToLeft,
     ),
     GetPage(
       name: Routes.COURSES,

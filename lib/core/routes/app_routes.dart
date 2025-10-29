@@ -6,6 +6,7 @@ import '../../features/courses/courses_screen.dart';
 import '../../features/assignments/assignments_screen.dart';
 import '../../features/grades/grades_screen.dart';
 import '../../features/profile/profile_screen.dart';
+import '../../features/profile/pages/edit_profile_page.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../shared/widgets/splash_screen.dart';
 import '../../features/auth/pages/login_page.dart';
@@ -187,7 +188,7 @@ class AppRoutes {
     // Profile related pages
     GetPage(
       name: editProfile,
-      page: () => const EditProfileScreen(),
+      page: () => const EditProfilePage(),
       transition: Transition.rightToLeft,
       transitionDuration: const Duration(milliseconds: 300),
     ),
@@ -410,18 +411,6 @@ class TranscriptScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Transcript')),
       body: const Center(child: Text('Academic Transcript')),
-    );
-  }
-}
-
-class EditProfileScreen extends StatelessWidget {
-  const EditProfileScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Edit Profile')),
-      body: const Center(child: Text('Edit Profile Screen')),
     );
   }
 }

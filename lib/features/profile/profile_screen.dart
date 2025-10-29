@@ -4,6 +4,7 @@ import '../../shared/themes/app_text_styles.dart';
 import '../../core/controllers/navigation_controller.dart';
 import '../../shared/themes/app_theme.dart';
 import '../auth/controllers/auth_controller.dart';
+import 'controllers/profile_controller.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -12,6 +13,11 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final authController = Get.find<AuthController>();
     final isAuthenticated = authController.isAuthenticated;
+
+    // Initialize ProfileController if user is authenticated
+    if (isAuthenticated) {
+      Get.put(ProfileController());
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -57,7 +63,7 @@ class _ProfileHeader extends StatelessWidget {
       return _GuestProfileCard();
     }
 
-    // Show authenticated user profile
+    // Show authenticated user profile with real data
     final user = authController.user;
     final displayName =
         user?.displayName ?? user?.email?.split('@')[0] ?? 'User';
@@ -69,55 +75,76 @@ class _ProfileHeader extends StatelessWidget {
         .join()
         .toUpperCase();
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            CircleAvatar(
-              radius: 50,
-              backgroundColor: Get.theme.colorScheme.primary,
-              backgroundImage: user?.photoURL != null
-                  ? NetworkImage(user!.photoURL!)
-                  : null,
-              child: user?.photoURL == null
-                  ? Text(
-                      initials,
-                      style: Get.textTheme.headlineMedium?.copyWith(
-                        color: Get.theme.colorScheme.onPrimary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    )
-                  : null,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              displayName,
-              style: AppTextStyles.cardTitle.copyWith(fontSize: 24),
-            ),
-            const SizedBox(height: 4),
-            Text(email, style: AppTextStyles.cardSubtitle),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    return GetBuilder<ProfileController>(
+      builder: (profileController) {
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
               children: [
-                _ProfileStat(label: 'Semester', value: '6th'),
-                _ProfileStat(label: 'Major', value: 'Computer Science'),
-                _ProfileStat(label: 'GPA', value: '3.78'),
+                CircleAvatar(
+                  radius: 50,
+                  backgroundColor: Get.theme.colorScheme.primary,
+                  backgroundImage: user?.photoURL != null
+                      ? NetworkImage(user!.photoURL!)
+                      : null,
+                  child: user?.photoURL == null
+                      ? Text(
+                          initials,
+                          style: Get.textTheme.headlineMedium?.copyWith(
+                            color: Get.theme.colorScheme.onPrimary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        )
+                      : null,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  displayName,
+                  style: AppTextStyles.cardTitle.copyWith(fontSize: 24),
+                ),
+                const SizedBox(height: 4),
+                Text(email, style: AppTextStyles.cardSubtitle),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    Expanded(
+                      child: _ProfileStat(
+                        label: 'Year',
+                        value: profileController.getProfileValue('year'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _ProfileStat(
+                        label: 'Major',
+                        value: profileController.getProfileValue('major'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _ProfileStat(
+                        label: 'GPA',
+                        value: profileController.getProfileValue('gpa'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Get.toNamed('/profile/edit'),
+                    icon: const Icon(Icons.edit),
+                    label: const Text('Edit Profile'),
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => Get.toNamed('/profile/edit'),
-                icon: const Icon(Icons.edit),
-                label: const Text('Edit Profile'),
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -132,9 +159,22 @@ class _ProfileStat extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(value, style: AppTextStyles.cardTitle),
+        Text(
+          value,
+          style: AppTextStyles.cardSubtitle.copyWith(
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
+          ),
+          textAlign: TextAlign.center,
+          maxLines: 3,
+        ),
         const SizedBox(height: 4),
-        Text(label, style: AppTextStyles.caption),
+        Text(
+          label,
+          style: AppTextStyles.caption,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+        ),
       ],
     );
   }
@@ -145,42 +185,48 @@ class _AcademicInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Academic Information', style: AppTextStyles.cardTitle),
-            const SizedBox(height: 16),
-            _InfoRow(
-              icon: Icons.school,
-              label: 'Student ID',
-              value: '20210001',
+    return GetBuilder<ProfileController>(
+      builder: (profileController) {
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Academic Information', style: AppTextStyles.cardTitle),
+                const SizedBox(height: 16),
+                _InfoRow(
+                  icon: Icons.school,
+                  label: 'Student ID',
+                  value: profileController.getProfileValue('studentId'),
+                ),
+                _InfoRow(
+                  icon: Icons.calendar_today,
+                  label: 'Expected Graduation',
+                  value: profileController.getProfileValue(
+                    'expectedGraduation',
+                  ),
+                ),
+                _InfoRow(
+                  icon: Icons.location_on,
+                  label: 'Campus',
+                  value: profileController.getProfileValue('campus'),
+                ),
+                _InfoRow(
+                  icon: Icons.person,
+                  label: 'Academic Advisor',
+                  value: profileController.getProfileValue('advisor'),
+                ),
+                _InfoRow(
+                  icon: Icons.group,
+                  label: 'Class Standing',
+                  value: profileController.getProfileValue('year'),
+                ),
+              ],
             ),
-            _InfoRow(
-              icon: Icons.calendar_today,
-              label: 'Expected Graduation',
-              value: 'May 2027',
-            ),
-            _InfoRow(
-              icon: Icons.location_on,
-              label: 'Campus',
-              value: 'Main Campus',
-            ),
-            _InfoRow(
-              icon: Icons.person,
-              label: 'Academic Advisor',
-              value: 'Dr. Sarah Wilson',
-            ),
-            _InfoRow(
-              icon: Icons.group,
-              label: 'Class Standing',
-              value: 'Junior',
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

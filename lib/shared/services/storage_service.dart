@@ -78,4 +78,17 @@ class StorageService extends GetxService {
     removeUserToken();
     removeUserData();
   }
+
+  // Profile-specific storage methods
+  void saveProfileData(String userId, Map<String, dynamic> profileData) {
+    write('profile_$userId', profileData);
+  }
+
+  Map<String, dynamic>? getProfileData(String userId) {
+    return read<Map<String, dynamic>>('profile_$userId');
+  }
+
+  void removeProfileData(String userId) {
+    remove('profile_$userId');
+  }
 }

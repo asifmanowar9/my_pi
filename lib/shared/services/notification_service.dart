@@ -392,7 +392,115 @@ class NotificationService extends GetxService {
     return await _flutterLocalNotificationsPlugin.pendingNotificationRequests();
   }
 
-  // Schedule recurring course reminders
+  // Schedule recurring course reminders (with individual times per day)
+  Future<void> scheduleCourseRemindersDetailed({
+    required String courseId,
+    required String courseName,
+    required String classroom,
+    required Map<int, String> dayTimeMap, // Map of dayOfWeek -> "HH:mm" format
+    required int reminderMinutes, // 10 or 15 minutes before
+  }) async {
+    // Check and request exact alarm permission if needed
+    await ensureExactAlarmPermission();
+
+    // Verify permission is granted before proceeding
+    final bool canSchedule = await canScheduleExactAlarms();
+    if (!canSchedule) {
+      print(
+        '❌ Cannot schedule notifications: Exact alarm permission not granted',
+      );
+      print(
+        '💡 Please enable exact alarm permission in Settings > Apps > My Pi > Alarms & reminders',
+      );
+      return;
+    }
+
+    // Cancel any existing notifications for this course
+    await cancelCourseReminders(courseId);
+
+    // Schedule notification for each day with its specific time
+    for (final entry in dayTimeMap.entries) {
+      final dayOfWeek = entry.key;
+      final classTime = entry.value;
+
+      // Parse class time for this specific day
+      final timeParts = classTime.split(':');
+      if (timeParts.length != 2) {
+        print('Invalid class time format for day $dayOfWeek: $classTime');
+        continue;
+      }
+
+      final hour = int.tryParse(timeParts[0]);
+      final minute = int.tryParse(timeParts[1]);
+
+      if (hour == null ||
+          minute == null ||
+          hour < 0 ||
+          hour > 23 ||
+          minute < 0 ||
+          minute > 59) {
+        print('Invalid time values for day $dayOfWeek: $hour:$minute');
+        continue;
+      }
+
+      // Schedule notification for this specific day-time combination for the next 8 weeks
+      for (int weekOffset = 0; weekOffset < 8; weekOffset++) {
+        final now = DateTime.now();
+        var nextClassDate = _getNextWeekday(now, dayOfWeek);
+
+        // Add week offset to get future weeks
+        nextClassDate = nextClassDate.add(Duration(days: 7 * weekOffset));
+
+        // Set the class time for this specific day
+        nextClassDate = DateTime(
+          nextClassDate.year,
+          nextClassDate.month,
+          nextClassDate.day,
+          hour,
+          minute,
+        );
+
+        // Calculate reminder time
+        final reminderTime = nextClassDate.subtract(
+          Duration(minutes: reminderMinutes),
+        );
+
+        // Only schedule if the reminder time is in the future
+        if (reminderTime.isAfter(now)) {
+          // Generate unique notification ID for this course, day, and week
+          final notificationId =
+              _generateCourseNotificationId(courseId, dayOfWeek) +
+              weekOffset; // Add week offset to make ID unique
+
+          print(
+            '📅 Course: $courseName | Day: $dayOfWeek | Time: $classTime | Week: $weekOffset',
+          );
+          print('   ⏰ Class time: $nextClassDate');
+          print('   🔔 Reminder time: $reminderTime');
+          print('   🕐 Current time: $now');
+          print('   ✓ Is in future: ${reminderTime.isAfter(now)}');
+
+          // Schedule the notification
+          await _scheduleCourseReminder(
+            id: notificationId,
+            courseName: courseName,
+            classroom: classroom,
+            reminderTime: reminderTime,
+            classTime: classTime, // Use the specific time for this day
+            reminderMinutes: reminderMinutes,
+            dayOfWeek: dayOfWeek,
+            courseId: courseId,
+          );
+        } else {
+          print(
+            '   ⚠️ Skipped: Day $dayOfWeek Week $weekOffset - Reminder time has already passed',
+          );
+        }
+      }
+    }
+  }
+
+  // Schedule recurring course reminders (legacy method for backward compatibility)
   Future<void> scheduleCourseReminders({
     required String courseId,
     required String courseName,
@@ -439,55 +547,61 @@ class NotificationService extends GetxService {
       return;
     }
 
-    // Schedule notification for each day of the week
+    // Schedule notification for each day of the week for the next 8 weeks
     for (final dayOfWeek in scheduleDays) {
       if (dayOfWeek < 1 || dayOfWeek > 7) continue;
 
-      // Get the next occurrence of this day
-      final now = DateTime.now();
-      var nextClassDate = _getNextWeekday(now, dayOfWeek);
+      // Schedule for the next 8 weeks to ensure continuous notifications
+      for (int weekOffset = 0; weekOffset < 8; weekOffset++) {
+        final now = DateTime.now();
+        var nextClassDate = _getNextWeekday(now, dayOfWeek);
 
-      // Set the class time
-      nextClassDate = DateTime(
-        nextClassDate.year,
-        nextClassDate.month,
-        nextClassDate.day,
-        hour,
-        minute,
-      );
+        // Add week offset to get future weeks
+        nextClassDate = nextClassDate.add(Duration(days: 7 * weekOffset));
 
-      // Calculate reminder time
-      final reminderTime = nextClassDate.subtract(
-        Duration(minutes: reminderMinutes),
-      );
-
-      print('📅 Course: $courseName | Day: $dayOfWeek');
-      print('   ⏰ Class time: $nextClassDate');
-      print('   🔔 Reminder time: $reminderTime');
-      print('   🕐 Current time: $now');
-      print('   ✓ Is in future: ${reminderTime.isAfter(now)}');
-
-      // Only schedule if the reminder time is in the future
-      if (reminderTime.isAfter(now)) {
-        // Generate unique notification ID for this course and day
-        final notificationId = _generateCourseNotificationId(
-          courseId,
-          dayOfWeek,
+        // Set the class time
+        nextClassDate = DateTime(
+          nextClassDate.year,
+          nextClassDate.month,
+          nextClassDate.day,
+          hour,
+          minute,
         );
 
-        // Schedule the notification
-        await _scheduleCourseReminder(
-          id: notificationId,
-          courseName: courseName,
-          classroom: classroom,
-          reminderTime: reminderTime,
-          classTime: classTime,
-          reminderMinutes: reminderMinutes,
-          dayOfWeek: dayOfWeek,
-          courseId: courseId,
+        // Calculate reminder time
+        final reminderTime = nextClassDate.subtract(
+          Duration(minutes: reminderMinutes),
         );
-      } else {
-        print('   ⚠️ Skipped: Reminder time has already passed');
+
+        // Only schedule if the reminder time is in the future
+        if (reminderTime.isAfter(now)) {
+          // Generate unique notification ID for this course, day, and week
+          final notificationId =
+              _generateCourseNotificationId(courseId, dayOfWeek) +
+              weekOffset; // Add week offset to make ID unique
+
+          print('📅 Course: $courseName | Day: $dayOfWeek | Week: $weekOffset');
+          print('   ⏰ Class time: $nextClassDate');
+          print('   🔔 Reminder time: $reminderTime');
+          print('   🕐 Current time: $now');
+          print('   ✓ Is in future: ${reminderTime.isAfter(now)}');
+
+          // Schedule the notification
+          await _scheduleCourseReminder(
+            id: notificationId,
+            courseName: courseName,
+            classroom: classroom,
+            reminderTime: reminderTime,
+            classTime: classTime,
+            reminderMinutes: reminderMinutes,
+            dayOfWeek: dayOfWeek,
+            courseId: courseId,
+          );
+        } else {
+          print(
+            '   ⚠️ Skipped: Week $weekOffset - Reminder time has already passed',
+          );
+        }
       }
     }
   }
@@ -565,7 +679,7 @@ class NotificationService extends GetxService {
       macOS: iosNotificationDetails,
     );
 
-    // Schedule weekly recurring notification
+    // Schedule notification for the specific date and time (non-recurring)
     await _flutterLocalNotificationsPlugin.zonedSchedule(
       id,
       '📚 Class Starting Soon',
@@ -576,8 +690,7 @@ class NotificationService extends GetxService {
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
       payload: 'course|$courseId',
-      matchDateTimeComponents:
-          DateTimeComponents.dayOfWeekAndTime, // Make it recurring weekly
+      // Remove recurring - schedule individual notifications for each occurrence
     );
 
     print(
@@ -586,10 +699,13 @@ class NotificationService extends GetxService {
   }
 
   Future<void> cancelCourseReminders(String courseId) async {
-    // Cancel notifications for all days of the week
+    // Cancel notifications for all days of the week and all weeks
     for (int dayOfWeek = 1; dayOfWeek <= 7; dayOfWeek++) {
-      final notificationId = _generateCourseNotificationId(courseId, dayOfWeek);
-      await cancelNotification(notificationId);
+      for (int weekOffset = 0; weekOffset < 8; weekOffset++) {
+        final notificationId =
+            _generateCourseNotificationId(courseId, dayOfWeek) + weekOffset;
+        await cancelNotification(notificationId);
+      }
     }
     print('✅ Cancelled all reminders for course: $courseId');
   }

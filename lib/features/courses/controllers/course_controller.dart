@@ -532,7 +532,7 @@ class CourseController extends GetxController {
 
     // Set schedule notification fields from course data
     _scheduleEntries.clear();
-    
+
     // Try to parse detailed schedule from the schedule field first
     bool parsedDetailed = false;
     if (course.schedule.contains('DETAILED:')) {
@@ -541,15 +541,18 @@ class CourseController extends GetxController {
         if (parts.length == 2) {
           final detailedPart = parts[1];
           final dayTimeEntries = detailedPart.split('|');
-          
+
           for (final entry in dayTimeEntries) {
             final dayTimeParts = entry.split(':');
-            if (dayTimeParts.length >= 3) { // day:hour:minute
+            if (dayTimeParts.length >= 3) {
+              // day:hour:minute
               final day = int.parse(dayTimeParts[0]);
               final hour = int.parse(dayTimeParts[1]);
               final minute = int.parse(dayTimeParts[2]);
               final time = TimeOfDay(hour: hour, minute: minute);
-              _scheduleEntries.add(ClassScheduleEntry(dayOfWeek: day, time: time));
+              _scheduleEntries.add(
+                ClassScheduleEntry(dayOfWeek: day, time: time),
+              );
             }
           }
           parsedDetailed = true;
@@ -559,7 +562,7 @@ class CourseController extends GetxController {
         parsedDetailed = false;
       }
     }
-    
+
     // Fallback to old format for backward compatibility
     if (!parsedDetailed &&
         course.scheduleDays != null &&
@@ -976,11 +979,11 @@ class CourseController extends GetxController {
       final detailedSchedule = _scheduleEntries
           .map((entry) => '${entry.dayOfWeek}:${entry.time24Hour}')
           .join('|');
-      
+
       // For backward compatibility with notifications, use the first entry's time
       final firstEntry = _scheduleEntries.first;
       classTimeStr = firstEntry.time24Hour;
-      
+
       // Override schedule string to include detailed day-time information
       scheduleString = '$scheduleString|DETAILED:$detailedSchedule';
     }
@@ -1168,39 +1171,110 @@ class CourseController extends GetxController {
   // Notification scheduling methods
   Future<void> _scheduleNotificationsForCourse(CourseModel course) async {
     try {
-      // Check if course has schedule information
-      if (course.scheduleDays == null ||
-          course.scheduleDays!.isEmpty ||
-          course.classTime == null ||
-          course.classTime!.isEmpty ||
-          course.reminderMinutes == null ||
-          course.reminderMinutes == 0) {
-        print(
-          '⚠️ Course ${course.name} does not have complete schedule information',
-        );
-        return;
-      }
-
       // Get notification service
       final notificationService = Get.find<NotificationService>();
 
       // Cancel any existing notifications for this course
       await notificationService.cancelCourseReminders(course.id);
 
-      // Schedule new notifications
-      await notificationService.scheduleCourseReminders(
-        courseId: course.id,
-        courseName: course.name,
-        classroom: course.classroom,
-        scheduleDays: course.scheduleDays!,
-        classTime: course.classTime!,
-        reminderMinutes: course.reminderMinutes!,
-      );
+      // Try to parse detailed schedule first (new format)
+      Map<int, String>? dayTimeMap = _parseDetailedSchedule(course.schedule);
+
+      if (dayTimeMap != null &&
+          dayTimeMap.isNotEmpty &&
+          course.reminderMinutes != null &&
+          course.reminderMinutes! > 0) {
+        // Use the new detailed scheduling method
+        print('📋 Using detailed schedule for ${course.name}:');
+        dayTimeMap.forEach((day, time) {
+          const dayNames = [
+            '',
+            'Monday',
+            'Tuesday',
+            'Wednesday',
+            'Thursday',
+            'Friday',
+            'Saturday',
+            'Sunday',
+          ];
+          print('   ${dayNames[day]}: $time');
+        });
+
+        await notificationService.scheduleCourseRemindersDetailed(
+          courseId: course.id,
+          courseName: course.name,
+          classroom: course.classroom,
+          dayTimeMap: dayTimeMap,
+          reminderMinutes: course.reminderMinutes!,
+        );
+      } else {
+        // Fallback to old format for backward compatibility
+        if (course.scheduleDays == null ||
+            course.scheduleDays!.isEmpty ||
+            course.classTime == null ||
+            course.classTime!.isEmpty ||
+            course.reminderMinutes == null ||
+            course.reminderMinutes == 0) {
+          print(
+            '⚠️ Course ${course.name} does not have complete schedule information',
+          );
+          return;
+        }
+
+        print('📋 Using legacy schedule format for ${course.name}');
+
+        // Schedule new notifications using legacy method
+        await notificationService.scheduleCourseReminders(
+          courseId: course.id,
+          courseName: course.name,
+          classroom: course.classroom,
+          scheduleDays: course.scheduleDays!,
+          classTime: course.classTime!,
+          reminderMinutes: course.reminderMinutes!,
+        );
+      }
 
       print('✅ Notifications scheduled for ${course.name}');
     } catch (e) {
       print('❌ Failed to schedule notifications for ${course.name}: $e');
       // Don't throw - notification failure shouldn't prevent course creation
+    }
+  }
+
+  // Parse detailed schedule from course.schedule string
+  Map<int, String>? _parseDetailedSchedule(String schedule) {
+    try {
+      // Look for DETAILED: format in schedule string
+      if (schedule.contains('|DETAILED:')) {
+        final parts = schedule.split('|DETAILED:');
+        if (parts.length >= 2) {
+          final detailedPart = parts[1];
+
+          // Parse format: "day1:time1|day2:time2|day3:time3"
+          final dayTimeMap = <int, String>{};
+          final entries = detailedPart.split('|');
+
+          for (final entry in entries) {
+            final dayTimeParts = entry.split(':');
+            if (dayTimeParts.length >= 3) {
+              // day:hour:minute
+              final day = int.tryParse(dayTimeParts[0]);
+              final hour = dayTimeParts[1];
+              final minute = dayTimeParts[2];
+
+              if (day != null && day >= 1 && day <= 7) {
+                dayTimeMap[day] = '$hour:$minute';
+              }
+            }
+          }
+
+          return dayTimeMap.isNotEmpty ? dayTimeMap : null;
+        }
+      }
+      return null;
+    } catch (e) {
+      print('Error parsing detailed schedule: $e');
+      return null;
     }
   }
 
