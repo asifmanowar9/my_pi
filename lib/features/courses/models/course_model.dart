@@ -48,20 +48,73 @@ class CourseModel {
     this.scheduleDays,
     this.classTime,
     this.reminderMinutes,
-  }) : status = status ?? _calculateStatus(startDate, endDate);
+  }) : status =
+           status ??
+           _calculateStatus(
+             startDate,
+             endDate,
+             durationMonths: durationMonths,
+             createdAt: createdAt,
+           ) {
+    // no-op constructor body; status already initialized
+  }
+
+  // Compute an "effective" start date (fallback to createdAt when startDate is null)
+  DateTime? get effectiveStartDate {
+    return startDate ?? createdAt;
+  }
+
+  // Compute an "effective" end date. If explicit endDate is missing but durationMonths
+  // is provided, compute end date using effectiveStartDate + durationMonths.
+  DateTime? get effectiveEndDate {
+    if (endDate != null) return endDate;
+    if (durationMonths != null && effectiveStartDate != null) {
+      try {
+        return DateTime(
+          effectiveStartDate!.year,
+          effectiveStartDate!.month + durationMonths!,
+          effectiveStartDate!.day,
+        );
+      } catch (e) {
+        // Fallback: approximate by adding duration in days
+        return effectiveStartDate!.add(Duration(days: durationMonths! * 30));
+      }
+    }
+    return null;
+  }
 
   // Calculate status based on dates
-  static String _calculateStatus(DateTime? startDate, DateTime? endDate) {
-    if (startDate == null || endDate == null) return 'active';
-
+  static String _calculateStatus(
+    DateTime? startDate,
+    DateTime? endDate, {
+    int? durationMonths,
+    DateTime? createdAt,
+  }) {
+    // Determine effective start and end dates similar to getters above
     final now = DateTime.now();
-    if (now.isBefore(startDate)) {
-      return 'upcoming';
-    } else if (now.isAfter(endDate)) {
-      return 'completed';
-    } else {
-      return 'active';
+
+    final effectiveStart = startDate ?? createdAt;
+
+    DateTime? effectiveEnd = endDate;
+    if (effectiveEnd == null &&
+        durationMonths != null &&
+        effectiveStart != null) {
+      try {
+        effectiveEnd = DateTime(
+          effectiveStart.year,
+          effectiveStart.month + durationMonths,
+          effectiveStart.day,
+        );
+      } catch (e) {
+        effectiveEnd = effectiveStart.add(Duration(days: durationMonths * 30));
+      }
     }
+
+    if (effectiveStart == null || effectiveEnd == null) return 'active';
+
+    if (now.isBefore(effectiveStart)) return 'upcoming';
+    if (now.isAfter(effectiveEnd)) return 'completed';
+    return 'active';
   }
 
   // Getter aliases for UI compatibility
@@ -75,21 +128,24 @@ class CourseModel {
 
   // Calculate days remaining until course ends
   int? get daysRemaining {
-    if (endDate == null) return null;
+    final eEnd = effectiveEndDate;
+    if (eEnd == null) return null;
     final now = DateTime.now();
-    if (now.isAfter(endDate!)) return 0;
-    return endDate!.difference(now).inDays;
+    if (now.isAfter(eEnd)) return 0;
+    return eEnd.difference(now).inDays;
   }
 
   // Get progress percentage (0-100)
   double? get progressPercentage {
-    if (startDate == null || endDate == null) return null;
+    final eStart = effectiveStartDate;
+    final eEnd = effectiveEndDate;
+    if (eStart == null || eEnd == null) return null;
 
     final now = DateTime.now();
-    final totalDuration = endDate!.difference(startDate!).inDays;
+    final totalDuration = eEnd.difference(eStart).inDays;
     if (totalDuration <= 0) return 100.0;
 
-    final elapsed = now.difference(startDate!).inDays;
+    final elapsed = now.difference(eStart).inDays;
     if (elapsed < 0) return 0.0;
     if (elapsed > totalDuration) return 100.0;
 
@@ -102,8 +158,10 @@ class CourseModel {
       if (durationMonths == 1) return '1 month';
       return '$durationMonths months';
     }
-    if (startDate != null && endDate != null) {
-      final months = ((endDate!.difference(startDate!).inDays) / 30).round();
+    final eStart = effectiveStartDate;
+    final eEnd = effectiveEndDate;
+    if (eStart != null && eEnd != null) {
+      final months = ((eEnd.difference(eStart).inDays) / 30).round();
       if (months == 1) return '1 month';
       return '$months months';
     }

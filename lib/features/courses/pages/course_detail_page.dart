@@ -58,6 +58,13 @@ class CourseDetailPage extends StatelessWidget {
             },
             tooltip: 'Edit Course',
           ),
+          IconButton(
+            icon: const Icon(Icons.check_circle_outline),
+            onPressed: course.isCompleted
+                ? null
+                : () => _showMarkCompleteConfirmation(context, controller),
+            tooltip: 'Mark Course Completed',
+          ),
           PopupMenuButton<String>(
             onSelected: (value) {
               switch (value) {
@@ -557,6 +564,38 @@ class CourseDetailPage extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _showMarkCompleteConfirmation(
+    BuildContext context,
+    CourseController controller,
+  ) async {
+    final confirmed = await Get.dialog<bool>(
+      AlertDialog(
+        title: const Text('Mark Course Completed'),
+        content: const Text(
+          'Are you sure you want to mark this course as completed? This will set the end date to today and stop reminders.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Get.back(result: true),
+            child: const Text('Mark Completed'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final success = await controller.markCourseCompleted(course.id);
+    if (success) {
+      // Close the details page so the caller can refresh and show updated status
+      Get.back();
+    }
   }
 
   Widget _buildAssessmentsSection(BuildContext context) {

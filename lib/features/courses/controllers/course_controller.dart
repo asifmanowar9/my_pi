@@ -1146,6 +1146,40 @@ class CourseController extends GetxController {
     return await deleteCourse(_selectedCourse.value!.id);
   }
 
+  // Mark course as completed manually (sets endDate to now and status to 'completed')
+  Future<bool> markCourseCompleted(String courseId) async {
+    try {
+      final courseIndex = _courses.indexWhere((c) => c.id == courseId);
+      if (courseIndex == -1) return false;
+
+      final course = _courses[courseIndex];
+
+      final updatedCourse = course.copyWith(
+        status: 'completed',
+        endDate: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      _isUpdating.value = true;
+      await _courseService.updateCourse(updatedCourse);
+
+      // Cancel notifications for this course since it's completed
+      await _cancelNotificationsForCourse(courseId);
+
+      _showSuccessSnackbar('Course marked completed');
+
+      // Reload to reflect changes
+      await loadCourses();
+      await loadStatistics();
+      return true;
+    } catch (e) {
+      _showErrorSnackbar('Failed to mark completed', e.toString());
+      return false;
+    } finally {
+      _isUpdating.value = false;
+    }
+  }
+
   // Export functionality
   Future<void> exportCourses() async {
     try {

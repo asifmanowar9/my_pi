@@ -10,6 +10,9 @@ import 'course_detail_page.dart';
 class CoursesPage extends StatelessWidget {
   const CoursesPage({super.key});
 
+  // Static state for expanded/collapsed completed section
+  static final RxBool _isCompletedExpanded = true.obs;
+
   @override
   Widget build(BuildContext context) {
     final CourseController controller = Get.put(CourseController());
@@ -111,7 +114,7 @@ class CoursesPage extends StatelessWidget {
             return const SizedBox.shrink();
           }),
 
-          // Course list
+          // Course list with sections
           Expanded(
             child: Obx(() {
               if (controller.isLoading) {
@@ -140,27 +143,96 @@ class CoursesPage extends StatelessWidget {
                 );
               }
 
+              // Separate courses by status
+              final activeCourses = controller.filteredCourses
+                  .where((course) => !course.isCompleted)
+                  .toList();
+              final completedCourses = controller.filteredCourses
+                  .where((course) => course.isCompleted)
+                  .toList();
+
               return RefreshIndicator(
                 onRefresh: controller.loadCourses,
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: controller.filteredCourses.length,
-                  itemBuilder: (context, index) {
-                    final course = controller.filteredCourses[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: CourseCard(
-                        course: course,
-                        onTap: () =>
-                            Get.to(() => CourseDetailPage(course: course)),
-                        onEdit: () {
-                          controller.selectCourseForEditing(course);
-                          Get.to(() => const AddCoursePage(isEditing: true));
-                        },
-                        onDelete: () => controller.deleteCourse(course.id),
+                child: CustomScrollView(
+                  slivers: [
+                    // Active Courses Section
+                    if (activeCourses.isNotEmpty) ...[
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                        sliver: SliverToBoxAdapter(
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.play_circle_filled,
+                                color: Colors.green,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Active Courses (${activeCourses.length})',
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.green,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    );
-                  },
+                      SliverPadding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate((
+                            context,
+                            index,
+                          ) {
+                            final course = activeCourses[index];
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: CourseCard(
+                                course: course,
+                                onTap: () => Get.to(
+                                  () => CourseDetailPage(course: course),
+                                ),
+                                onEdit: () {
+                                  controller.selectCourseForEditing(course);
+                                  Get.to(
+                                    () => const AddCoursePage(isEditing: true),
+                                  );
+                                },
+                                onDelete: () =>
+                                    controller.deleteCourse(course.id),
+                              ),
+                            );
+                          }, childCount: activeCourses.length),
+                        ),
+                      ),
+                    ],
+
+                    // Completed Courses Section
+                    if (completedCourses.isNotEmpty) ...[
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                        sliver: SliverToBoxAdapter(
+                          child: _buildCompletedSectionHeader(
+                            context,
+                            completedCourses.length,
+                          ),
+                        ),
+                      ),
+                      SliverPadding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        sliver: _buildCompletedCoursesSection(
+                          completedCourses,
+                          controller,
+                        ),
+                      ),
+                    ],
+
+                    // Add some bottom padding
+                    const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
+                  ],
                 ),
               );
             }),
@@ -409,5 +481,107 @@ class CoursesPage extends StatelessWidget {
     }
 
     return filters.join(' • ');
+  }
+
+  Widget _buildCompletedSectionHeader(BuildContext context, int count) {
+    return Obx(
+      () => InkWell(
+        onTap: () => _isCompletedExpanded.toggle(),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          child: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.blue.shade600, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Completed Courses ($count)',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue.shade600,
+                ),
+              ),
+              const Spacer(),
+              Icon(
+                _isCompletedExpanded.value
+                    ? Icons.keyboard_arrow_up
+                    : Icons.keyboard_arrow_down,
+                color: Colors.blue.shade600,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompletedCoursesSection(
+    List<dynamic> completedCourses,
+    CourseController controller,
+  ) {
+    return Obx(() {
+      if (!_isCompletedExpanded.value) {
+        return const SliverToBoxAdapter(child: SizedBox.shrink());
+      }
+
+      return SliverList(
+        delegate: SliverChildBuilderDelegate((context, index) {
+          final course = completedCourses[index];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Opacity(
+              opacity: 0.7,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.green.withOpacity(0.3),
+                    width: 2,
+                  ),
+                ),
+                child: Stack(
+                  children: [
+                    CourseCard(
+                      course: course,
+                      onTap: () =>
+                          Get.to(() => CourseDetailPage(course: course)),
+                      onEdit: () {
+                        controller.selectCourseForEditing(course);
+                        Get.to(() => const AddCoursePage(isEditing: true));
+                      },
+                      onDelete: () => controller.deleteCourse(course.id),
+                    ),
+                    // Completion overlay
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.green,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.check,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }, childCount: completedCourses.length),
+      );
+    });
   }
 }

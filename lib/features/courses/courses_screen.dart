@@ -246,42 +246,188 @@ class _CoursesListSection extends StatelessWidget {
 
   const _CoursesListSection({required this.controller});
 
+  // Static state for expanded/collapsed completed section
+  static final RxBool _isCompletedExpanded = true.obs;
+
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final courses = controller.filteredCourses;
+      final allCourses = controller.filteredCourses;
+
+      // Separate courses by status
+      final activeCourses = allCourses
+          .where((course) => !course.isCompleted)
+          .toList();
+      final completedCourses = allCourses
+          .where((course) => course.isCompleted)
+          .toList();
 
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('My Courses', style: AppTextStyles.cardTitle),
-              Text(
-                '${courses.length} course${courses.length != 1 ? 's' : ''}',
-                style: AppTextStyles.cardSubtitle,
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: courses.length,
-            itemBuilder: (context, index) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _CourseCard(
-                  course: courses[index],
-                  controller: controller,
+          // Active Courses Section
+          if (activeCourses.isNotEmpty) ...[
+            Row(
+              children: [
+                Icon(Icons.play_circle_filled, color: Colors.green, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Active Courses (${activeCourses.length})',
+                  style: AppTextStyles.cardTitle?.copyWith(color: Colors.green),
                 ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: activeCourses.length,
+              itemBuilder: (context, index) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _CourseCard(
+                    course: activeCourses[index],
+                    controller: controller,
+                  ),
+                );
+              },
+            ),
+          ],
+
+          // Completed Courses Section
+          if (completedCourses.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            _buildCompletedSectionHeader(context, completedCourses.length),
+            const SizedBox(height: 16),
+            Obx(() {
+              if (!_isCompletedExpanded.value) {
+                return const SizedBox.shrink();
+              }
+
+              return ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: completedCourses.length,
+                itemBuilder: (context, index) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Opacity(
+                      opacity: 0.7,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.green.withOpacity(0.3),
+                            width: 2,
+                          ),
+                        ),
+                        child: Stack(
+                          children: [
+                            _CourseCard(
+                              course: completedCourses[index],
+                              controller: controller,
+                            ),
+                            // Completion overlay
+                            Positioned(
+                              top: 12,
+                              right: 12,
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.green,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.2),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.check,
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
               );
-            },
-          ),
+            }),
+          ],
+
+          // Show message if no courses at all
+          if (activeCourses.isEmpty && completedCourses.isEmpty)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('My Courses', style: AppTextStyles.cardTitle),
+                const SizedBox(height: 16),
+                Center(
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.school_outlined,
+                        size: 64,
+                        color: Get.theme.colorScheme.outline,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No courses yet',
+                        style: AppTextStyles.cardTitle?.copyWith(
+                          color: Get.theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Add your first course to get started',
+                        style: AppTextStyles.cardSubtitle,
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
         ],
       );
     });
+  }
+
+  Widget _buildCompletedSectionHeader(BuildContext context, int count) {
+    return Obx(
+      () => InkWell(
+        onTap: () => _isCompletedExpanded.toggle(),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          child: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.blue.shade600, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Completed Courses ($count)',
+                style: AppTextStyles.cardTitle?.copyWith(
+                  color: Colors.blue.shade600,
+                ),
+              ),
+              const Spacer(),
+              Icon(
+                _isCompletedExpanded.value
+                    ? Icons.keyboard_arrow_up
+                    : Icons.keyboard_arrow_down,
+                color: Colors.blue.shade600,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
