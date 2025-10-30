@@ -23,16 +23,14 @@ class CoursesScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            onPressed: () {
-              // TODO: Implement search
-            },
+            onPressed: () => _showSearchDialog(context, controller),
           ),
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: () {
-              // TODO: Implement filter
-            },
-          ),
+          // IconButton(
+          //   icon: const Icon(Icons.filter_list),
+          //   onPressed: () {
+          //     // TODO: Implement filter
+          //   },
+          // ),
         ],
       ),
       body: Obx(() {
@@ -102,6 +100,47 @@ class CoursesScreen extends StatelessWidget {
         },
         tooltip: 'Add Course',
         child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  void _showSearchDialog(BuildContext context, CourseController controller) {
+    final searchController = TextEditingController(
+      text: controller.searchQuery,
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Search Courses'),
+        content: TextField(
+          controller: searchController,
+          decoration: const InputDecoration(
+            hintText: 'Search by course name or teacher...',
+            prefixIcon: Icon(Icons.search),
+          ),
+          autofocus: true,
+          onSubmitted: (value) {
+            controller.setSearchQuery(value);
+            Get.back();
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              controller.setSearchQuery(''); // Reset search query
+              Get.back();
+            },
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              controller.setSearchQuery(searchController.text);
+              Get.back();
+            },
+            child: const Text('Search'),
+          ),
+        ],
       ),
     );
   }
@@ -273,7 +312,7 @@ class _CoursesListSection extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   'Active Courses (${activeCourses.length})',
-                  style: AppTextStyles.cardTitle?.copyWith(color: Colors.green),
+                  style: AppTextStyles.cardTitle.copyWith(color: Colors.green),
                 ),
               ],
             ),
@@ -379,7 +418,7 @@ class _CoursesListSection extends StatelessWidget {
                       const SizedBox(height: 16),
                       Text(
                         'No courses yet',
-                        style: AppTextStyles.cardTitle?.copyWith(
+                        style: AppTextStyles.cardTitle.copyWith(
                           color: Get.theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
@@ -412,7 +451,7 @@ class _CoursesListSection extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 'Completed Courses ($count)',
-                style: AppTextStyles.cardTitle?.copyWith(
+                style: AppTextStyles.cardTitle.copyWith(
                   color: Colors.blue.shade600,
                 ),
               ),

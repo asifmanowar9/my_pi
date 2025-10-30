@@ -3,7 +3,7 @@ import 'package:get_storage/get_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
-import '../../../core/routes.dart';
+import '../../../core/routes/app_routes.dart';
 import '../../../core/database/database_helper_clean.dart';
 import '../../courses/services/course_service.dart';
 import '../../courses/controllers/assessment_controller.dart';
@@ -313,7 +313,7 @@ class AuthController extends GetxController {
       _clearForms();
 
       // Force navigation to login and clear all previous routes
-      Get.offAllNamed(Routes.LOGIN);
+      Get.offAllNamed(AppRoutes.login);
 
       _showSuccessMessage('Signed out successfully');
     } catch (e) {
@@ -408,6 +408,39 @@ class AuthController extends GetxController {
     }
   }
 
+  // Change password method
+  Future<void> changePassword(String currentPassword, String newPassword) async {
+    if (_user.value == null) {
+      throw Exception('User is not authenticated');
+    }
+
+    try {
+      // Re-authenticate user with current password
+      final credential = EmailAuthProvider.credential(
+        email: _user.value!.email!,
+        password: currentPassword,
+      );
+      
+      await _user.value!.reauthenticateWithCredential(credential);
+      
+      // Update password
+      await _user.value!.updatePassword(newPassword);
+      
+      // Sign out user after password change for security
+      await signOut();
+    } catch (e) {
+      if (e.toString().contains('wrong-password')) {
+        throw Exception('Current password is incorrect');
+      } else if (e.toString().contains('weak-password')) {
+        throw Exception('New password is too weak');
+      } else if (e.toString().contains('requires-recent-login')) {
+        throw Exception('Please sign out and sign in again before changing password');
+      } else {
+        throw Exception('Failed to change password: ${e.toString()}');
+      }
+    }
+  }
+
   // Continue as guest - navigate to home page without authentication
   void continueAsGuest() {
     try {
@@ -440,7 +473,7 @@ class AuthController extends GetxController {
     try {
       // Mark that user has passed welcome page
       _storage.write('isFirstLaunch', false);
-      Get.toNamed(Routes.LOGIN);
+      Get.toNamed(AppRoutes.login);
     } catch (e) {
       _handleError('Navigation failed: ${e.toString()}');
     }
@@ -451,7 +484,7 @@ class AuthController extends GetxController {
     try {
       // Mark that user has passed welcome page
       _storage.write('isFirstLaunch', false);
-      Get.toNamed(Routes.REGISTER);
+      Get.toNamed(AppRoutes.register);
     } catch (e) {
       _handleError('Navigation failed: ${e.toString()}');
     }

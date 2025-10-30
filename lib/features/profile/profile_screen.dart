@@ -291,23 +291,23 @@ class _QuickActions extends StatelessWidget {
                   label: 'Transcript',
                   onTap: () => Get.toNamed('/transcript'),
                 ),
-                _ActionButton(
-                  icon: Icons.notifications,
-                  label: 'Notifications',
-                  onTap: () => Get.toNamed('/profile/notifications'),
-                ),
+                // _ActionButton(
+                //   icon: Icons.notifications,
+                //   label: 'Notifications',
+                //   onTap: () => Get.toNamed('/profile/notifications'),
+                // ),
                 _ActionButton(
                   icon: Icons.lock,
                   label: 'Password',
                   onTap: () => Get.toNamed('/profile/password'),
                 ),
-                _ActionButton(
-                  icon: Icons.help,
-                  label: 'Help & Support',
-                  onTap: () {
-                    // TODO: Implement help
-                  },
-                ),
+                // _ActionButton(
+                //   icon: Icons.help,
+                //   label: 'Help & Support',
+                //   onTap: () {
+                //     // TODO: Implement help
+                //   },
+                // ),
               ],
             ),
           ],
@@ -389,24 +389,24 @@ class _PreferencesSection extends StatelessWidget {
               },
             ),
             const Divider(),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(
-                Icons.notifications_outlined,
-                color: Get.theme.colorScheme.primary,
-              ),
-              title: Text(
-                'Notification Settings',
-                style: AppTextStyles.cardSubtitle,
-              ),
-              subtitle: Text(
-                'Manage your notification preferences',
-                style: AppTextStyles.caption,
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Get.toNamed('/profile/notifications'),
-            ),
-            const Divider(),
+            // ListTile(
+            //   contentPadding: EdgeInsets.zero,
+            //   leading: Icon(
+            //     Icons.notifications_outlined,
+            //     color: Get.theme.colorScheme.primary,
+            //   ),
+            //   title: Text(
+            //     'Notification Settings',
+            //     style: AppTextStyles.cardSubtitle,
+            //   ),
+            //   subtitle: Text(
+            //     'Manage your notification preferences',
+            //     style: AppTextStyles.caption,
+            //   ),
+            //   trailing: const Icon(Icons.chevron_right),
+            //   onTap: () => Get.toNamed('/profile/notifications'),
+            // ),
+            // const Divider(),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: Icon(Icons.logout, color: Colors.red),

@@ -4,6 +4,9 @@ import 'package:intl/intl.dart';
 import '../../shared/themes/app_text_styles.dart';
 import '../../shared/themes/app_colors.dart';
 import '../../core/controllers/navigation_controller.dart';
+import '../courses/controllers/course_controller.dart';
+import '../courses/models/course_model.dart';
+import '../courses/pages/course_detail_page.dart';
 import 'controllers/home_controller.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -228,6 +231,7 @@ class _TodaysScheduleSection extends StatelessWidget {
             return Column(
               children: schedule.map((item) {
                 return _ScheduleItem(
+                  courseId: item['courseId'] as String? ?? '',
                   time: item['time'] as String,
                   subject: item['subject'] as String,
                   room: item['room'] as String,
@@ -242,62 +246,106 @@ class _TodaysScheduleSection extends StatelessWidget {
 }
 
 class _ScheduleItem extends StatelessWidget {
+  final String courseId;
   final String time;
   final String subject;
   final String room;
 
   const _ScheduleItem({
+    required this.courseId,
     required this.time,
     required this.subject,
     required this.room,
   });
 
+  Future<void> _navigateToCourseDetail() async {
+    if (courseId.isEmpty) return;
+
+    try {
+      // Get the course controller to find the course
+      final courseController = Get.find<CourseController>();
+
+      // Find the course by ID
+      final CourseModel? course = courseController.courses.firstWhereOrNull(
+        (c) => c.id == courseId,
+      );
+
+      if (course != null) {
+        // Navigate to course detail page
+        Get.to(() => CourseDetailPage(course: course));
+      } else {
+        // Course not found, show error
+        Get.snackbar(
+          'Error',
+          'Course not found',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+    } catch (e) {
+      // Error finding course controller or course
+      Get.snackbar(
+        'Error',
+        'Unable to open course details',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 60,
-            child: Text(
-              time,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  subject,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  room,
+      child: InkWell(
+        onTap: _navigateToCourseDetail,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 60,
+                child: Text(
+                  time,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(
                       context,
                     ).colorScheme.onSurface.withOpacity(0.6),
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      subject,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      room,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withOpacity(0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+                size: 20,
+              ),
+            ],
           ),
-          Icon(
-            Icons.chevron_right,
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
-            size: 20,
-          ),
-        ],
+        ),
       ),
     );
   }

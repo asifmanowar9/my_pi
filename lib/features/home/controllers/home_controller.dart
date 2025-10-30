@@ -102,9 +102,9 @@ class HomeController extends GetxController {
       print('Start of today: $startOfToday');
 
       if (userId.isEmpty) {
-        // Load all data if no user
+        // Load all data if no user (exclude completed courses)
         final coursesResult = await db.rawQuery(
-          'SELECT COUNT(*) as count FROM courses',
+          "SELECT COUNT(*) as count FROM courses WHERE status != 'completed'",
         );
         activeCourses.value = coursesResult.first['count'] as int? ?? 0;
         print('Active courses (all): ${activeCourses.value}');
@@ -131,15 +131,23 @@ class HomeController extends GetxController {
           );
         }
 
-        // Count pending tasks from assessments table (is_completed = 0)
+        // Count pending tasks from assessments table (is_completed = 0) for non-completed courses
         final assessmentsResult = await db.rawQuery(
-          "SELECT COUNT(*) as count FROM assessments WHERE is_completed = 0 AND due_date >= ?",
+          '''
+          SELECT COUNT(*) as count FROM assessments a
+          INNER JOIN courses c ON a.course_id = c.id
+          WHERE a.is_completed = 0 AND a.due_date >= ? AND c.status != 'completed'
+          ''',
           [startOfToday],
         );
 
-        // Also count from assignments table
+        // Also count from assignments table for non-completed courses
         final assignmentsResult = await db.rawQuery(
-          "SELECT COUNT(*) as count FROM assignments WHERE status != 'completed' AND due_date >= ?",
+          '''
+          SELECT COUNT(*) as count FROM assignments a
+          INNER JOIN courses c ON a.course_id = c.id
+          WHERE a.status != 'completed' AND a.due_date >= ? AND c.status != 'completed'
+          ''',
           [startOfToday],
         );
 
@@ -154,30 +162,30 @@ class HomeController extends GetxController {
         );
         print('Total pending tasks: ${pendingTasks.value}');
       } else {
-        // Load user-specific data
+        // Load user-specific data (exclude completed courses)
         final coursesResult = await db.rawQuery(
-          'SELECT COUNT(*) as count FROM courses WHERE user_id = ?',
+          "SELECT COUNT(*) as count FROM courses WHERE user_id = ? AND status != 'completed'",
           [userId],
         );
         activeCourses.value = coursesResult.first['count'] as int? ?? 0;
         print('Active courses (user): ${activeCourses.value}');
 
-        // Count from assessments table (is_completed = 0)
+        // Count from assessments table (is_completed = 0) for non-completed courses
         final assessmentsResult = await db.rawQuery(
           '''
           SELECT COUNT(*) as count FROM assessments a
           INNER JOIN courses c ON a.course_id = c.id
-          WHERE c.user_id = ? AND a.is_completed = 0 AND a.due_date >= ?
+          WHERE c.user_id = ? AND a.is_completed = 0 AND a.due_date >= ? AND c.status != 'completed'
           ''',
           [userId, startOfToday],
         );
 
-        // Also count from assignments table (for legacy data)
+        // Also count from assignments table (for legacy data) for non-completed courses
         final assignmentsResult = await db.rawQuery(
           '''
           SELECT COUNT(*) as count FROM assignments a
           INNER JOIN courses c ON a.course_id = c.id
-          WHERE c.user_id = ? AND a.status != 'completed' AND a.due_date >= ?
+          WHERE c.user_id = ? AND a.status != 'completed' AND a.due_date >= ? AND c.status != 'completed'
           ''',
           [userId, startOfToday],
         );
@@ -216,24 +224,24 @@ class HomeController extends GetxController {
       print('Day of week: ${today.weekday} ($todayAbbr)');
       print('User ID: ${userId.isEmpty ? "EMPTY" : userId}');
 
-      // Debug: Check all courses
+      // Debug: Check all courses and their status
       final allCourses = await db.rawQuery(
-        'SELECT id, name, schedule FROM courses',
+        'SELECT id, name, schedule, status FROM courses',
       );
       print('Total courses in DB: ${allCourses.length}');
       for (var c in allCourses) {
-        print('  - ${c['name']}: schedule=${c['schedule']}');
+        print('  - ${c['name']}: schedule=${c['schedule']}, status=${c['status']}');
       }
 
       List<Map<String, dynamic>> result;
 
-      // Get courses that have classes scheduled for today
+      // Get courses that have classes scheduled for today (exclude completed courses)
       if (userId.isEmpty) {
         result = await db.rawQuery(
           '''
-          SELECT name, teacher_name, classroom, schedule
+          SELECT id, name, teacher_name, classroom, schedule
           FROM courses
-          WHERE schedule LIKE ? OR schedule LIKE ?
+          WHERE status != 'completed' AND (schedule LIKE ? OR schedule LIKE ?)
           ORDER BY schedule
           LIMIT 10
           ''',
@@ -242,9 +250,9 @@ class HomeController extends GetxController {
       } else {
         result = await db.rawQuery(
           '''
-          SELECT name, teacher_name, classroom, schedule
+          SELECT id, name, teacher_name, classroom, schedule
           FROM courses
-          WHERE user_id = ? AND (schedule LIKE ? OR schedule LIKE ?)
+          WHERE user_id = ? AND status != 'completed' AND (schedule LIKE ? OR schedule LIKE ?)
           ORDER BY schedule
           LIMIT 10
           ''',
@@ -281,6 +289,7 @@ class HomeController extends GetxController {
         print('Parsed: ${course['name']} at $time');
 
         return {
+          'courseId': course['id'] as String? ?? '',
           'time': time,
           'subject': course['name'] as String? ?? 'Unknown',
           'room': course['classroom'] as String? ?? 'TBA',
@@ -335,7 +344,7 @@ class HomeController extends GetxController {
                  a.last_sync_at as lastSyncAt, c.name as course_name
           FROM assignments a
           INNER JOIN courses c ON a.course_id = c.id
-          WHERE a.due_date >= ? AND a.status != 'completed'
+          WHERE a.due_date >= ? AND a.status != 'completed' AND c.status != 'completed'
           ORDER BY a.due_date ASC
           ''',
           [startOfToday],
@@ -350,7 +359,7 @@ class HomeController extends GetxController {
                  a.last_sync_at as lastSyncAt, c.name as course_name
           FROM assignments a
           INNER JOIN courses c ON a.course_id = c.id
-          WHERE c.user_id = ? AND a.due_date >= ? AND a.status != 'completed'
+          WHERE c.user_id = ? AND a.due_date >= ? AND a.status != 'completed' AND c.status != 'completed'
           ORDER BY a.due_date ASC
           ''',
           [userId, startOfToday],
@@ -364,7 +373,7 @@ class HomeController extends GetxController {
         print('  - ${r['title']}: due=${r['dueDate']}, status=${r['status']}');
       }
 
-      // Also check assessments table (this is where the quiz data is!)
+      // Also check assessments table (this is where the quiz data is!) for non-completed courses
       List<Map<String, dynamic>> assessmentsResult;
       if (userId.isEmpty) {
         assessmentsResult = await db.rawQuery('''
@@ -377,7 +386,7 @@ class HomeController extends GetxController {
                  0 as isSynced, null as lastSyncAt, c.name as course_name
           FROM assessments a
           INNER JOIN courses c ON a.course_id = c.id
-          WHERE a.is_completed = 0 AND a.due_date IS NOT NULL
+          WHERE a.is_completed = 0 AND a.due_date IS NOT NULL AND c.status != 'completed'
           ORDER BY a.due_date ASC
           ''');
       } else {
@@ -392,7 +401,7 @@ class HomeController extends GetxController {
                  0 as isSynced, null as lastSyncAt, c.name as course_name
           FROM assessments a
           INNER JOIN courses c ON a.course_id = c.id
-          WHERE c.user_id = ? AND a.is_completed = 0 AND a.due_date IS NOT NULL
+          WHERE c.user_id = ? AND a.is_completed = 0 AND a.due_date IS NOT NULL AND c.status != 'completed'
           ORDER BY a.due_date ASC
           ''',
           [userId],

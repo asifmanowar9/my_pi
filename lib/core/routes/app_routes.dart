@@ -7,6 +7,8 @@ import '../../features/assignments/assignments_screen.dart';
 import '../../features/grades/grades_screen.dart';
 import '../../features/profile/profile_screen.dart';
 import '../../features/profile/pages/edit_profile_page.dart';
+import '../../features/profile/pages/change_password_page.dart';
+import '../../features/transcript/pages/transcript_page.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../shared/widgets/splash_screen.dart';
 import '../../features/auth/pages/login_page.dart';
@@ -180,7 +182,7 @@ class AppRoutes {
 
     GetPage(
       name: transcript,
-      page: () => const TranscriptScreen(),
+      page: () => const TranscriptPage(),
       transition: Transition.rightToLeft,
       transitionDuration: const Duration(milliseconds: 300),
     ),
@@ -195,7 +197,7 @@ class AppRoutes {
 
     GetPage(
       name: changePassword,
-      page: () => const ChangePasswordScreen(),
+      page: () => const ChangePasswordPage(),
       transition: Transition.rightToLeft,
       transitionDuration: const Duration(milliseconds: 300),
     ),

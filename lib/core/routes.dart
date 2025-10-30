@@ -7,13 +7,14 @@ import '../features/auth/pages/login_page.dart';
 import '../features/auth/pages/register_page.dart';
 import '../features/auth/pages/welcome_page.dart';
 import '../features/auth/pages/forgot_password_page.dart';
-import '../features/auth/controllers/auth_controller.dart';
 import '../features/auth/services/auth_service.dart';
 import '../features/debug/pages/database_viewer_page.dart';
 import '../features/courses/pages/courses_page.dart';
 import '../features/courses/pages/course_detail_page.dart';
 import '../features/home/home_screen.dart';
 import '../features/profile/pages/edit_profile_page.dart';
+import '../features/profile/pages/change_password_page.dart';
+import '../features/transcript/pages/transcript_page.dart';
 // import '../features/assignments/pages/assignments_page.dart';
 // import '../features/grades/pages/grades_page.dart';
 
@@ -26,6 +27,8 @@ class Routes {
   static const String HOME = '/home';
   static const String PROFILE = '/profile';
   static const String PROFILE_EDIT = '/profile/edit';
+  static const String PROFILE_PASSWORD = '/profile/password';
+  static const String TRANSCRIPT = '/transcript';
   static const String COURSES = '/courses';
   static const String COURSE_DETAIL = '/course-detail';
   static const String ASSIGNMENTS = '/assignments';
@@ -45,6 +48,8 @@ class AppRoutes {
   static const String home = Routes.HOME;
   static const String profile = Routes.PROFILE;
   static const String profileEdit = Routes.PROFILE_EDIT;
+  static const String profilePassword = Routes.PROFILE_PASSWORD;
+  static const String transcript = Routes.TRANSCRIPT;
   static const String courses = Routes.COURSES;
   static const String courseDetail = Routes.COURSE_DETAIL;
   static const String assignments = Routes.ASSIGNMENTS;
@@ -85,6 +90,16 @@ class AppRoutes {
     GetPage(
       name: Routes.PROFILE_EDIT,
       page: () => const EditProfilePage(),
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: Routes.PROFILE_PASSWORD,
+      page: () => const ChangePasswordPage(),
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: Routes.TRANSCRIPT,
+      page: () => const TranscriptPage(),
       transition: Transition.rightToLeft,
     ),
     GetPage(

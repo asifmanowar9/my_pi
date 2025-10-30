@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/auth_controller.dart';
-import '../../../core/routes.dart';
+import '../../../core/routes/app_routes.dart';
 
 class RegisterPage extends StatelessWidget {
   const RegisterPage({super.key});

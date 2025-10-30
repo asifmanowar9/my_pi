@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/auth_controller.dart';
-import '../../../core/routes.dart';
+import '../../../core/routes/app_routes.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -334,7 +334,7 @@ class _LoginPageState extends State<LoginPage> {
                                   const Spacer(),
                                   TextButton(
                                     onPressed: () =>
-                                        Get.toNamed(Routes.FORGOT_PASSWORD),
+                                        Get.toNamed(AppRoutes.forgotPassword),
                                     style: TextButton.styleFrom(
                                       padding: EdgeInsets.zero,
                                       minimumSize: const Size(0, 0),
@@ -397,7 +397,7 @@ class _LoginPageState extends State<LoginPage> {
                                   ),
                                   TextButton(
                                     onPressed: () =>
-                                        Get.toNamed(Routes.REGISTER),
+                                        Get.toNamed(AppRoutes.register),
                                     style: TextButton.styleFrom(
                                       padding: EdgeInsets.zero,
                                       minimumSize: const Size(0, 0),

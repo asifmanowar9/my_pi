@@ -113,48 +113,48 @@ class _NotificationSection extends StatelessWidget {
           children: [
             Text('Notifications', style: AppTextStyles.cardTitle),
             const SizedBox(height: 16),
-            _NotificationTile(
-              icon: Icons.assignment,
-              title: 'Assignment Reminders',
-              subtitle: 'Get notified about upcoming assignments',
-              value: true,
-              onChanged: (value) {
-                // TODO: Implement notification setting
-              },
-            ),
-            _NotificationTile(
-              icon: Icons.grade,
-              title: 'Grade Updates',
-              subtitle: 'Get notified when grades are posted',
-              value: true,
-              onChanged: (value) {
-                // TODO: Implement notification setting
-              },
-            ),
-            _NotificationTile(
-              icon: Icons.schedule,
-              title: 'Class Reminders',
-              subtitle: 'Get notified before classes start',
-              value: false,
-              onChanged: (value) {
-                // TODO: Implement notification setting
-              },
-            ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.tune, color: Get.theme.colorScheme.primary),
-              title: Text(
-                'Advanced Notification Settings',
-                style: AppTextStyles.cardSubtitle,
-              ),
-              subtitle: Text(
-                'Customize notification timing and frequency',
-                style: AppTextStyles.caption,
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Get.toNamed('/profile/notifications'),
-            ),
-            const Divider(),
+            // _NotificationTile(
+            //   icon: Icons.assignment,
+            //   title: 'Assignment Reminders',
+            //   subtitle: 'Get notified about upcoming assignments',
+            //   value: true,
+            //   onChanged: (value) {
+            //     // TODO: Implement notification setting
+            //   },
+            // ),
+            // _NotificationTile(
+            //   icon: Icons.grade,
+            //   title: 'Grade Updates',
+            //   subtitle: 'Get notified when grades are posted',
+            //   value: true,
+            //   onChanged: (value) {
+            //     // TODO: Implement notification setting
+            //   },
+            // ),
+            // _NotificationTile(
+            //   icon: Icons.schedule,
+            //   title: 'Class Reminders',
+            //   subtitle: 'Get notified before classes start',
+            //   value: false,
+            //   onChanged: (value) {
+            //     // TODO: Implement notification setting
+            //   },
+            // ),
+            // ListTile(
+            //   contentPadding: EdgeInsets.zero,
+            //   leading: Icon(Icons.tune, color: Get.theme.colorScheme.primary),
+            //   title: Text(
+            //     'Advanced Notification Settings',
+            //     style: AppTextStyles.cardSubtitle,
+            //   ),
+            //   subtitle: Text(
+            //     'Customize notification timing and frequency',
+            //     style: AppTextStyles.caption,
+            //   ),
+            //   trailing: const Icon(Icons.chevron_right),
+            //   onTap: () => Get.toNamed('/profile/notifications'),
+            // ),
+            // const Divider(),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: Icon(Icons.bug_report, color: Colors.orange),
@@ -350,9 +350,9 @@ class _AboutSection extends StatelessWidget {
         title: const Text('Help & Support'),
         content: const Text(
           'For help and support, please contact:\n\n'
-          'Email: support@mypi.edu\n'
-          'Phone: (555) 123-4567\n'
-          'Hours: Mon-Fri 9AM-5PM',
+          'Email: asifpc2022@gmail.com\n'
+          'Phone: (+88) 01726288836\n'
+          'Hours: Sat-Thu 9AM-5PM',
         ),
         actions: [
           TextButton(onPressed: () => Get.back(), child: const Text('Close')),
