@@ -615,7 +615,7 @@ class _CourseCard extends StatelessWidget {
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      course.schedule,
+                      _getCleanSchedule(course.schedule),
                       style: AppTextStyles.caption,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -646,5 +646,13 @@ class _CourseCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  // Helper function to clean schedule string by removing DETAILED information
+  String _getCleanSchedule(String schedule) {
+    if (schedule.contains('|DETAILED:')) {
+      return schedule.split('|DETAILED:')[0];
+    }
+    return schedule;
   }
 }

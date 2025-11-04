@@ -471,7 +471,7 @@ class CourseDetailPage extends StatelessWidget {
                         _buildDetailRow(
                           context,
                           'Schedule',
-                          course.schedule,
+                          _getCleanSchedule(course.schedule),
                           Icons.schedule,
                           Colors.orange,
                         ),
@@ -1367,7 +1367,7 @@ class CourseDetailPage extends StatelessWidget {
     controller.codeController.text = course.code ?? '';
     controller.teacherController.text = course.teacherName;
     controller.classroomController.text = course.classroom;
-    controller.scheduleController.text = course.schedule;
+    controller.scheduleController.text = _getCleanSchedule(course.schedule);
     controller.descriptionController.text = course.description ?? '';
     controller.creditsController.text = course.credits.toString();
 
@@ -1381,5 +1381,13 @@ class CourseDetailPage extends StatelessWidget {
       colorText: Colors.blue[800],
       icon: const Icon(Icons.copy, color: Colors.blue),
     );
+  }
+
+  // Helper function to clean schedule string by removing DETAILED information
+  String _getCleanSchedule(String schedule) {
+    if (schedule.contains('|DETAILED:')) {
+      return schedule.split('|DETAILED:')[0];
+    }
+    return schedule;
   }
 }

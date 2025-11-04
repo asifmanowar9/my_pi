@@ -13,9 +13,11 @@ allprojects {
 subprojects {
     configurations.all {
         resolutionStrategy {
-            force("androidx.core:core:1.12.0")
-            force("androidx.core:core-ktx:1.12.0")
-            force("androidx.appcompat:appcompat:1.6.1")
+            force("androidx.core:core:1.13.1")
+            force("androidx.core:core-ktx:1.13.1")
+            force("androidx.appcompat:appcompat:1.7.0")
+            force("androidx.activity:activity:1.9.2")
+            force("androidx.fragment:fragment:1.8.4")
         }
     }
 }

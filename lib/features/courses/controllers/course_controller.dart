@@ -371,9 +371,6 @@ class CourseController extends GetxController {
     try {
       _isDeleting.value = true;
 
-      final confirmed = await _showDeleteConfirmation();
-      if (!confirmed) return false;
-
       await _courseService.deleteCourse(courseId);
 
       // Cancel notifications for this course
@@ -1049,37 +1046,6 @@ class CourseController extends GetxController {
     }
 
     return errors;
-  }
-
-  Future<bool> _showDeleteConfirmation() async {
-    final result = await Get.dialog<bool>(
-      AlertDialog(
-        icon: Icon(
-          Icons.delete_outline,
-          color: Get.theme.colorScheme.error,
-          size: 28,
-        ),
-        title: const Text('Delete Course'),
-        content: const Text(
-          'Are you sure you want to delete this course? This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Get.back(result: false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Get.back(result: true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Get.theme.colorScheme.error,
-              foregroundColor: Get.theme.colorScheme.onError,
-            ),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    return result ?? false;
   }
 
   void _showSuccessSnackbar(String message) {

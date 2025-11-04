@@ -234,7 +234,7 @@ class CourseCard extends StatelessWidget {
                     if (course.schedule.isNotEmpty)
                       _buildInfoChip(
                         icon: Icons.schedule,
-                        label: course.schedule,
+                        label: _getCleanSchedule(course.schedule),
                         color: Colors.orange,
                       ),
                   ],
@@ -414,5 +414,13 @@ class CourseCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  // Helper function to clean schedule string by removing DETAILED information
+  String _getCleanSchedule(String schedule) {
+    if (schedule.contains('|DETAILED:')) {
+      return schedule.split('|DETAILED:')[0];
+    }
+    return schedule;
   }
 }
