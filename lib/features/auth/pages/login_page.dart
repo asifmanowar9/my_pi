@@ -312,15 +312,22 @@ class _LoginPageState extends State<LoginPage> {
                                   SizedBox(
                                     height: 20,
                                     width: 20,
-                                    child: Checkbox(
-                                      value: false,
-                                      onChanged: (_) {},
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(4),
+                                    child: Obx(
+                                      () => Checkbox(
+                                        value: authController.rememberMe,
+                                        onChanged: (value) {
+                                          authController.rememberMe =
+                                              value ?? false;
+                                        },
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                        ),
+                                        visualDensity: VisualDensity.compact,
+                                        materialTapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
                                       ),
-                                      visualDensity: VisualDensity.compact,
-                                      materialTapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap,
                                     ),
                                   ),
                                   const SizedBox(width: 8),

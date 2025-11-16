@@ -20,6 +20,7 @@ class EditProfileController extends GetxController {
   late TextEditingController nameController;
   late TextEditingController emailController;
   late TextEditingController phoneController;
+  late TextEditingController birthDateController;
   late TextEditingController studentIdController;
   late TextEditingController gpaController;
   late TextEditingController advisorController;
@@ -95,6 +96,7 @@ class EditProfileController extends GetxController {
     nameController = TextEditingController();
     emailController = TextEditingController();
     phoneController = TextEditingController();
+    birthDateController = TextEditingController();
     studentIdController = TextEditingController();
     gpaController = TextEditingController();
     advisorController = TextEditingController();
@@ -109,6 +111,7 @@ class EditProfileController extends GetxController {
     nameController.dispose();
     emailController.dispose();
     phoneController.dispose();
+    birthDateController.dispose();
     studentIdController.dispose();
     gpaController.dispose();
     advisorController.dispose();
@@ -365,6 +368,22 @@ class EditProfileController extends GetxController {
     } finally {
       print('Setting isSaving to false');
       isSaving.value = false;
+    }
+  }
+
+  // Birth date picker method
+  Future<void> selectBirthDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().subtract(
+        const Duration(days: 6570),
+      ), // Default to 18 years old
+      firstDate: DateTime(1900),
+      lastDate: DateTime.now(),
+    );
+
+    if (picked != null) {
+      birthDateController.text = "${picked.day}/${picked.month}/${picked.year}";
     }
   }
 }

@@ -925,22 +925,55 @@ class DatabaseHelper {
     );
   }
 
-  Future<List<Map<String, dynamic>>> getAllAssessments() async {
+  Future<List<Map<String, dynamic>>> getAllAssessments([String? userId]) async {
     final db = await database;
-    return await db.query('assessments', orderBy: 'due_date ASC');
+
+    if (userId != null && userId.isNotEmpty) {
+      // Filter assessments by user through their courses
+      return await db.rawQuery(
+        '''
+        SELECT a.* FROM assessments a
+        INNER JOIN courses c ON a.course_id = c.id
+        WHERE c.user_id = ?
+        ORDER BY a.due_date ASC
+      ''',
+        [userId],
+      );
+    } else {
+      // Fallback for backward compatibility
+      return await db.query('assessments', orderBy: 'due_date ASC');
+    }
   }
 
   // Get assessments with upcoming due dates for notifications
-  Future<List<Map<String, dynamic>>> getUpcomingAssessments() async {
+  Future<List<Map<String, dynamic>>> getUpcomingAssessments([
+    String? userId,
+  ]) async {
     final db = await database;
     final now = DateTime.now().toIso8601String();
-    return await db.query(
-      'assessments',
-      where: 'due_date >= ? AND is_completed = 0',
-      whereArgs: [now],
-      orderBy: 'due_date ASC',
-      limit: 10,
-    );
+
+    if (userId != null && userId.isNotEmpty) {
+      // Filter upcoming assessments by user through their courses
+      return await db.rawQuery(
+        '''
+        SELECT a.* FROM assessments a
+        INNER JOIN courses c ON a.course_id = c.id
+        WHERE c.user_id = ? AND a.due_date >= ? AND a.is_completed = 0
+        ORDER BY a.due_date ASC
+        LIMIT 10
+      ''',
+        [userId, now],
+      );
+    } else {
+      // Fallback for backward compatibility
+      return await db.query(
+        'assessments',
+        where: 'due_date >= ? AND is_completed = 0',
+        whereArgs: [now],
+        orderBy: 'due_date ASC',
+        limit: 10,
+      );
+    }
   }
 
   Future<void> close() async {

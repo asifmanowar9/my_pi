@@ -60,7 +60,9 @@ class AssessmentController extends GetxController {
   Future<void> loadAllAssessments() async {
     try {
       isLoading.value = true;
-      final data = await _dbHelper.getAllAssessments();
+      // Get current user ID for proper data isolation
+      final userId = _authController?.user?.uid;
+      final data = await _dbHelper.getAllAssessments(userId);
       assessments.value = data.map((e) => AssessmentModel.fromMap(e)).toList();
     } catch (e) {
       Get.snackbar(
@@ -336,7 +338,9 @@ class AssessmentController extends GetxController {
   // Get all assessments with reminders for rescheduling (e.g., after app restart)
   Future<void> rescheduleAllReminders() async {
     try {
-      final upcoming = await _dbHelper.getUpcomingAssessments();
+      // Get current user ID for proper data isolation
+      final userId = _authController?.user?.uid;
+      final upcoming = await _dbHelper.getUpcomingAssessments(userId);
       for (final data in upcoming) {
         final assessment = AssessmentModel.fromMap(data);
         if (assessment.dueDate != null && assessment.reminderMinutes != null) {
@@ -360,9 +364,21 @@ class AssessmentController extends GetxController {
     try {
       print('🔄 Starting assessment sync to Firebase...');
 
-      // Get all assessments from local database
-      final localAssessments = await _dbHelper.getAllAssessments();
-      print('📊 Found ${localAssessments.length} local assessments to sync');
+      // Get current user ID from AuthController
+      String? currentUserId;
+      if (_authController?.user?.uid != null) {
+        currentUserId = _authController!.user!.uid;
+        print('👤 Current user ID: $currentUserId');
+      } else {
+        print('❌ No current user ID available, skipping sync');
+        return;
+      }
+
+      // Get only current user's assessments from local database
+      final localAssessments = await _dbHelper.getAllAssessments(currentUserId);
+      print(
+        '📊 Found ${localAssessments.length} local assessments for current user to sync',
+      );
 
       int syncedCount = 0;
       for (final assessmentData in localAssessments) {

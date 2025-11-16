@@ -207,11 +207,11 @@ class _AcademicInfo extends StatelessWidget {
                     'expectedGraduation',
                   ),
                 ),
-                _InfoRow(
-                  icon: Icons.location_on,
-                  label: 'Campus',
-                  value: profileController.getProfileValue('campus'),
-                ),
+                // _InfoRow(
+                //   icon: Icons.location_on,
+                //   label: 'Campus',
+                //   value: profileController.getProfileValue('campus'),
+                // ),
                 _InfoRow(
                   icon: Icons.person,
                   label: 'Academic Advisor',

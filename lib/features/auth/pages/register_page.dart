@@ -3,14 +3,36 @@ import 'package:get/get.dart';
 import '../controllers/auth_controller.dart';
 import '../../../core/routes/app_routes.dart';
 
-class RegisterPage extends StatelessWidget {
+class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
 
   @override
+  State<RegisterPage> createState() => _RegisterPageState();
+}
+
+class _RegisterPageState extends State<RegisterPage> {
+  late final AuthController authController;
+  late final GlobalKey<FormState> registerFormKey;
+  bool _hasInitialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    authController = Get.find<AuthController>();
+    registerFormKey = GlobalKey<FormState>(debugLabel: 'register_form');
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final authController = Get.find<AuthController>();
-    final registerFormKey = GlobalKey<FormState>(debugLabel: 'register_form');
     final size = MediaQuery.of(context).size;
+
+    // Clear saved credentials only once when first entering registration page
+    if (!_hasInitialized) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        authController.clearFormFieldsForRegistration();
+        _hasInitialized = true;
+      });
+    }
 
     return Scaffold(
       body: Container(
@@ -90,15 +112,6 @@ class RegisterPage extends StatelessWidget {
 
                           const SizedBox(height: 16),
 
-                          // Last Name Field (using a new controller if available)
-                          _CustomTextField(
-                            controller: TextEditingController(),
-                            hint: 'Last Name',
-                            prefixIcon: Icons.person_outlined,
-                          ),
-
-                          const SizedBox(height: 16),
-
                           // Email Field
                           _CustomTextField(
                             controller: authController.emailController,
@@ -106,16 +119,6 @@ class RegisterPage extends StatelessWidget {
                             prefixIcon: Icons.email_outlined,
                             keyboardType: TextInputType.emailAddress,
                             validator: authController.validateEmail,
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          // Birth Date Field
-                          _CustomTextField(
-                            controller: TextEditingController(),
-                            hint: 'Birth Date',
-                            prefixIcon: Icons.cake_outlined,
-                            suffixIcon: const Icon(Icons.calendar_today),
                           ),
 
                           const SizedBox(height: 16),
@@ -137,8 +140,60 @@ class RegisterPage extends StatelessWidget {
                                     authController.togglePasswordVisibility,
                               ),
                               validator: authController.validatePassword,
+                              onChanged: (value) =>
+                                  authController.checkPasswordStrength(value),
                             ),
                           ),
+
+                          const SizedBox(height: 12),
+
+                          // Password Strength Indicator
+                          Obx(() {
+                            final strength =
+                                authController.passwordStrength.value;
+                            if (authController
+                                .passwordController
+                                .text
+                                .isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      'Password Strength: ',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                    Text(
+                                      authController.getStrengthLabel(strength),
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: authController.getStrengthColor(
+                                          strength,
+                                        ),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                LinearProgressIndicator(
+                                  value: strength / 5,
+                                  backgroundColor: Colors.grey.shade300,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    authController.getStrengthColor(strength),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                              ],
+                            );
+                          }),
 
                           const SizedBox(height: 16),
 
@@ -407,6 +462,7 @@ class _CustomTextField extends StatelessWidget {
   final bool obscureText;
   final TextInputType? keyboardType;
   final String? Function(String?)? validator;
+  final void Function(String)? onChanged;
 
   const _CustomTextField({
     required this.controller,
@@ -416,6 +472,7 @@ class _CustomTextField extends StatelessWidget {
     this.obscureText = false,
     this.keyboardType,
     this.validator,
+    this.onChanged,
   });
 
   @override
@@ -425,6 +482,7 @@ class _CustomTextField extends StatelessWidget {
       obscureText: obscureText,
       keyboardType: keyboardType,
       validator: validator,
+      onChanged: onChanged,
       style: TextStyle(color: Colors.grey.shade800, fontSize: 16),
       decoration: InputDecoration(
         hintText: hint,

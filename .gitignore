@@ -12,6 +12,9 @@
 .swiftpm/
 migrate_working_dir/
 
+# Project documentation
+PROJECT_REPORT.md
+
 # IntelliJ related
 *.iml
 *.ipr

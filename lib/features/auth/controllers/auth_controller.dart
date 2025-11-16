@@ -2,7 +2,10 @@ import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:crypto/crypto.dart';
+import 'dart:convert';
 import '../services/auth_service.dart';
+import '../exceptions/auth_exceptions.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/database/database_helper_clean.dart';
 import '../../courses/services/course_service.dart';
@@ -36,7 +39,6 @@ class AuthController extends GetxController {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController confirmPasswordController =
       TextEditingController();
-  final GlobalKey<FormState> loginFormKey = GlobalKey<FormState>();
   final GlobalKey<FormState> registerFormKey = GlobalKey<FormState>();
 
   // Password visibility for UI
@@ -44,6 +46,9 @@ class AuthController extends GetxController {
   final RxBool _obscureConfirmPassword = true.obs;
   bool get obscurePassword => _obscurePassword.value;
   bool get obscureConfirmPassword => _obscureConfirmPassword.value;
+
+  // Password strength validation
+  final RxInt passwordStrength = 0.obs;
 
   // Additional loading states for UI compatibility
   final RxBool _isResettingPassword = false.obs;
@@ -53,6 +58,11 @@ class AuthController extends GetxController {
   final RxBool _acceptTerms = false.obs;
   bool get acceptTerms => _acceptTerms.value;
   set acceptTerms(bool value) => _acceptTerms.value = value;
+
+  // Remember me functionality
+  final RxBool _rememberMe = false.obs;
+  bool get rememberMe => _rememberMe.value;
+  set rememberMe(bool value) => _rememberMe.value = value;
 
   // 4. Error handling
   final RxString _errorMessage = ''.obs;
@@ -64,6 +74,7 @@ class AuthController extends GetxController {
   void onInit() {
     super.onInit();
     _initializeAuth();
+    _loadSavedCredentials();
   }
 
   void _initializeAuth() {
@@ -153,8 +164,6 @@ class AuthController extends GetxController {
 
         // Also migrate any associated assignments and assessments
         for (final course in anonymousCourses) {
-          final courseId = course['id'] as String;
-
           // Note: assignments and assessments are linked by course_id,
           // so they automatically become associated with the user through the course
           print('  ✅ Migrated course: ${course['name']} (${course['id']})');
@@ -172,8 +181,6 @@ class AuthController extends GetxController {
 
   // 2. Login method with loading state
   Future<void> login() async {
-    if (!loginFormKey.currentState!.validate()) return;
-
     _isSigningIn.value = true;
     _clearError();
 
@@ -185,16 +192,17 @@ class AuthController extends GetxController {
       );
 
       if (userModel != null) {
-        // 8. Cloud backup enablement after successful login
-        await _enableCloudBackup();
+        print('✅ Login successful: ${userModel.email}');
 
-        // 9. Sync unsynced data to cloud
-        await _syncUnsyncedDataToCloud();
-
-        // 7. Navigation handling after authentication
+        // Show success message and navigate immediately
+        _showSuccessMessage('Welcome back!');
         _navigateAfterAuth();
 
-        _showSuccessMessage('Welcome back!');
+        // Run background tasks without blocking navigation
+        _performBackgroundLoginTasks();
+      } else {
+        print('❌ Login returned null user');
+        _handleError('Login failed - please try again');
       }
     } catch (e) {
       // 4. Error handling with user-friendly messages
@@ -223,19 +231,12 @@ class AuthController extends GetxController {
       if (userModel != null) {
         print('✅ Registration successful: ${userModel.email}');
 
-        // 8. Cloud backup enablement after successful login
-        await _enableCloudBackup();
-
-        // 9. Sync unsynced data to cloud
-        await _syncUnsyncedDataToCloud();
-
-        // 7. Navigation handling after authentication
+        // Show success message and navigate immediately
+        _showSuccessMessage('Account created successfully!');
         _navigateAfterAuth();
 
-        // Show success message after a brief delay to ensure UI is ready
-        Future.delayed(const Duration(milliseconds: 500), () {
-          _showSuccessMessage('Account created successfully!');
-        });
+        // Run background tasks without blocking navigation
+        _performBackgroundLoginTasks();
       } else {
         print('❌ Registration returned null user');
         _handleError('Registration failed - please try again');
@@ -261,19 +262,14 @@ class AuthController extends GetxController {
       if (userModel != null) {
         print('✅ Google Sign-In successful: ${userModel.email}');
 
-        // 8. Cloud backup enablement after successful login
-        await _enableCloudBackup();
+        // Show success message and navigate immediately
+        _showSuccessMessage('Signed in with Google successfully!');
 
-        // 9. Sync unsynced data to cloud
-        await _syncUnsyncedDataToCloud();
-
-        // 7. Navigation handling after authentication
+        // Navigate immediately for better UX
         _navigateAfterAuth();
 
-        // Show success message after a brief delay to ensure UI is ready
-        Future.delayed(const Duration(milliseconds: 500), () {
-          _showSuccessMessage('Signed in with Google successfully!');
-        });
+        // Do background operations after navigation
+        _performBackgroundLoginTasks();
       } else {
         print('❌ Google Sign-In returned null user');
         _handleError('Google Sign-In was cancelled or failed');
@@ -306,8 +302,19 @@ class AuthController extends GetxController {
       // Clear any guest state as well
       _storage.write('isGuest', false);
 
+      // Clear saved credentials if not remembering
+      if (!_rememberMe.value) {
+        await _clearSavedCredentials();
+      }
+
       // Sign out from Firebase Auth (this will trigger the auth state listener)
       await _authService.signOut();
+
+      // Clear assessment data when user logs out
+      if (Get.isRegistered<AssessmentController>()) {
+        final assessmentController = Get.find<AssessmentController>();
+        assessmentController.assessments.clear();
+      }
 
       // Clear form data
       _clearForms();
@@ -340,9 +347,28 @@ class AuthController extends GetxController {
     if (value == null || value.isEmpty) {
       return 'Password is required';
     }
-    if (value.length < 6) {
-      return 'Password must be at least 6 characters';
+    if (value.length < 8) {
+      return 'Password must be at least 8 characters';
     }
+
+    // Check for required character types
+    bool hasUpperCase = value.contains(RegExp(r'[A-Z]'));
+    bool hasLowerCase = value.contains(RegExp(r'[a-z]'));
+    bool hasNumbers = value.contains(RegExp(r'[0-9]'));
+    bool hasSpecialCharacters = value.contains(
+      RegExp(r'[!@#$%^&*(),.?":{}|<>]'),
+    );
+
+    List<String> missing = [];
+    if (!hasUpperCase) missing.add('uppercase letter');
+    if (!hasLowerCase) missing.add('lowercase letter');
+    if (!hasNumbers) missing.add('number');
+    if (!hasSpecialCharacters) missing.add('special character');
+
+    if (missing.isNotEmpty) {
+      return 'Password must contain: ${missing.join(', ')}';
+    }
+
     return null;
   }
 
@@ -355,6 +381,55 @@ class AuthController extends GetxController {
       return 'Name must be at least 2 characters';
     }
     return null;
+  }
+
+  // Password strength checking methods
+  void checkPasswordStrength(String password) {
+    int strength = 0;
+
+    if (password.length >= 8) strength++;
+    if (password.contains(RegExp(r'[A-Z]'))) strength++;
+    if (password.contains(RegExp(r'[a-z]'))) strength++;
+    if (password.contains(RegExp(r'[0-9]'))) strength++;
+    if (password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) strength++;
+
+    passwordStrength.value = strength;
+  }
+
+  String getStrengthLabel(int strength) {
+    switch (strength) {
+      case 0:
+      case 1:
+        return 'Very Weak';
+      case 2:
+        return 'Weak';
+      case 3:
+        return 'Fair';
+      case 4:
+        return 'Good';
+      case 5:
+        return 'Strong';
+      default:
+        return 'Unknown';
+    }
+  }
+
+  Color getStrengthColor(int strength) {
+    switch (strength) {
+      case 0:
+      case 1:
+        return Colors.red;
+      case 2:
+        return Colors.orange;
+      case 3:
+        return Colors.yellow;
+      case 4:
+        return Colors.lightGreen;
+      case 5:
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
   }
 
   // UI Compatibility methods for existing pages
@@ -370,6 +445,7 @@ class AuthController extends GetxController {
 
   // Method aliases for UI compatibility
   Future<void> signInWithEmailAndPassword() async {
+    // Validation is handled in UI layer, proceed with login
     await login();
   }
 
@@ -409,7 +485,10 @@ class AuthController extends GetxController {
   }
 
   // Change password method
-  Future<void> changePassword(String currentPassword, String newPassword) async {
+  Future<void> changePassword(
+    String currentPassword,
+    String newPassword,
+  ) async {
     if (_user.value == null) {
       throw Exception('User is not authenticated');
     }
@@ -420,12 +499,12 @@ class AuthController extends GetxController {
         email: _user.value!.email!,
         password: currentPassword,
       );
-      
+
       await _user.value!.reauthenticateWithCredential(credential);
-      
+
       // Update password
       await _user.value!.updatePassword(newPassword);
-      
+
       // Sign out user after password change for security
       await signOut();
     } catch (e) {
@@ -434,7 +513,9 @@ class AuthController extends GetxController {
       } else if (e.toString().contains('weak-password')) {
         throw Exception('New password is too weak');
       } else if (e.toString().contains('requires-recent-login')) {
-        throw Exception('Please sign out and sign in again before changing password');
+        throw Exception(
+          'Please sign out and sign in again before changing password',
+        );
       } else {
         throw Exception('Failed to change password: ${e.toString()}');
       }
@@ -508,29 +589,43 @@ class AuthController extends GetxController {
 
   // 4. Error handling with user-friendly messages
   void _handleError(dynamic error) {
-    String message = 'An unexpected error occurred';
+    String message;
+    if (error is AuthException) {
+      message = error.message;
+    } else if (error is Exception) {
+      message = error.toString();
+    } else {
+      message = error.toString();
+    }
 
-    if (error.toString().contains('user-not-found')) {
-      message = 'No account found with this email';
-    } else if (error.toString().contains('wrong-password')) {
-      message = 'Incorrect password';
-    } else if (error.toString().contains('email-already-in-use')) {
-      message = 'Email is already registered';
-    } else if (error.toString().contains('weak-password')) {
-      message = 'Password is too weak';
-    } else if (error.toString().contains('invalid-email')) {
-      message = 'Invalid email address';
-    } else if (error.toString().contains('network-request-failed')) {
-      message = 'Network error. Check your connection';
+    // Handle common Firebase Auth error codes
+    if (message.contains('user-not-found')) {
+      message = 'No account found with this email address.';
+    } else if (message.contains('wrong-password') ||
+        message.contains('invalid-credential')) {
+      message = 'Invalid email or password. Please check your credentials.';
+    } else if (message.contains('user-disabled')) {
+      message = 'This account has been disabled.';
+    } else if (message.contains('too-many-requests')) {
+      message = 'Too many failed attempts. Please try again later.';
+    } else if (message.contains('network')) {
+      message = 'Network error. Please check your internet connection.';
+    } else if (message.contains('email-already-in-use')) {
+      message = 'Email is already registered.';
+    } else if (message.contains('weak-password')) {
+      message = 'Password is too weak.';
+    } else if (message.contains('invalid-email')) {
+      message = 'Invalid email address.';
     }
 
     _errorMessage.value = message;
     Get.snackbar(
-      'Error',
+      'Login Failed',
       message,
-      backgroundColor: Colors.red,
+      backgroundColor: Colors.red.shade700,
       colorText: Colors.white,
       snackPosition: SnackPosition.BOTTOM,
+      duration: const Duration(seconds: 4),
     );
   }
 
@@ -540,11 +635,12 @@ class AuthController extends GetxController {
 
   void _showSuccessMessage(String message) {
     Get.snackbar(
-      'Success',
+      'Welcome!',
       message,
-      backgroundColor: Colors.green,
+      backgroundColor: Colors.green.shade700,
       colorText: Colors.white,
       snackPosition: SnackPosition.BOTTOM,
+      duration: const Duration(seconds: 3),
     );
   }
 
@@ -555,24 +651,21 @@ class AuthController extends GetxController {
       _clearError();
       print('🔄 Navigating to main screen...');
 
-      // Use a delayed navigation to ensure the context is ready
-      Future.delayed(const Duration(milliseconds: 100), () {
+      // Navigate directly to main scaffold
+      try {
+        Get.offAllNamed(AppRoutes.main);
+        print('✅ Navigation to main screen completed');
+      } catch (e) {
+        print('❌ Navigation error: $e');
+        // Fallback: try direct navigation to splash and let it redirect
         try {
-          // Navigate to main scaffold which contains the home screen
-          Get.offAllNamed('/main');
-          print('✅ Navigation to main screen completed');
-        } catch (e) {
-          print('❌ Navigation error: $e');
-          // Fallback: try direct navigation to splash and let it redirect
-          try {
-            Get.offAllNamed('/splash');
-            print('✅ Fallback navigation to splash successful');
-          } catch (fallbackError) {
-            print('❌ Fallback navigation failed: $fallbackError');
-            _handleError('Navigation failed. Please restart the app.');
-          }
+          Get.offAllNamed(AppRoutes.splash);
+          print('✅ Fallback navigation to splash successful');
+        } catch (fallbackError) {
+          print('❌ Fallback navigation failed: $fallbackError');
+          _handleError('Navigation failed. Please restart the app.');
         }
-      });
+      }
     } catch (e) {
       print('❌ Navigation setup error: $e');
       _handleError('Navigation failed: ${e.toString()}');
@@ -587,6 +680,115 @@ class AuthController extends GetxController {
       debugPrint('Cloud backup enabled for user: ${user?.uid}');
     } catch (e) {
       debugPrint('Failed to enable cloud backup: $e');
+    }
+  }
+
+  // Background operations after login for better UX
+  Future<void> _performBackgroundLoginTasks() async {
+    // Perform these operations in background without blocking UI
+    Future.microtask(() async {
+      try {
+        print('🔄 Starting background login tasks...');
+
+        // Clear any previous user's data FIRST before any sync operations
+        if (Get.isRegistered<AssessmentController>()) {
+          final assessmentController = Get.find<AssessmentController>();
+          assessmentController.assessments.clear();
+          print('🗑️ Cleared previous user assessment data from controller');
+        }
+
+        // Save credentials if remember me is checked
+        if (_rememberMe.value) {
+          await _saveCredentials();
+        } else {
+          await _clearSavedCredentials();
+        }
+
+        // Enable cloud backup
+        await _enableCloudBackup();
+
+        // Sync ONLY current user's unsynced data to cloud
+        await _syncUnsyncedDataToCloud();
+
+        print('✅ Background login tasks completed');
+      } catch (e) {
+        print('❌ Background login tasks failed: $e');
+        // Don't show error to user as these are background operations
+      }
+    });
+  }
+
+  // Remember me functionality methods
+  Future<void> _saveCredentials() async {
+    try {
+      final email = emailController.text.trim();
+      final password = passwordController.text;
+
+      // Hash the password for security
+      final bytes = utf8.encode(password + email); // Adding email as salt
+      final digest = sha256.convert(bytes);
+      final passwordHash = digest.toString();
+
+      _storage.write('saved_email', email);
+      _storage.write('saved_password_hash', passwordHash);
+      _storage.write('remember_me', true);
+      print('✅ Credentials saved for remember me (password hashed)');
+    } catch (e) {
+      print('❌ Failed to save credentials: $e');
+    }
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    try {
+      final savedEmail = _storage.read('saved_email') ?? '';
+      final savedPasswordHash = _storage.read('saved_password_hash') ?? '';
+      final shouldRemember = _storage.read('remember_me') ?? false;
+
+      if (shouldRemember &&
+          savedEmail.isNotEmpty &&
+          savedPasswordHash.isNotEmpty) {
+        emailController.text = savedEmail;
+        // Note: We don't restore the actual password for security
+        // The user will need to re-enter it, but the email will be pre-filled
+        _rememberMe.value = true;
+        print(
+          '✅ Email loaded from remember me (password requires re-entry for security)',
+        );
+      }
+    } catch (e) {
+      print('❌ Failed to load saved credentials: $e');
+    }
+  }
+
+  // Check if user should be auto-logged in
+  bool shouldAutoLogin() {
+    final savedEmail = _storage.read('saved_email') ?? '';
+    final savedPasswordHash = _storage.read('saved_password_hash') ?? '';
+    final shouldRemember = _storage.read('remember_me') ?? false;
+    return shouldRemember &&
+        savedEmail.isNotEmpty &&
+        savedPasswordHash.isNotEmpty;
+  }
+
+  // Clear form fields for registration mode
+  void clearFormFieldsForRegistration() {
+    emailController.clear();
+    passwordController.clear();
+    confirmPasswordController.clear();
+    nameController.clear();
+    _rememberMe.value = false;
+    passwordStrength.value = 0;
+    print('✅ Form fields cleared for registration mode');
+  }
+
+  Future<void> _clearSavedCredentials() async {
+    try {
+      _storage.remove('saved_email');
+      _storage.remove('saved_password_hash');
+      _storage.remove('remember_me');
+      print('✅ Saved credentials cleared');
+    } catch (e) {
+      print('❌ Failed to clear saved credentials: $e');
     }
   }
 
@@ -623,8 +825,11 @@ class AuthController extends GetxController {
   }
 
   void _clearForms() {
-    emailController.clear();
-    passwordController.clear();
+    // Only clear forms if not remembering credentials
+    if (!_rememberMe.value) {
+      emailController.clear();
+      passwordController.clear();
+    }
     nameController.clear();
     confirmPasswordController.clear();
   }

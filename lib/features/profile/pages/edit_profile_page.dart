@@ -185,6 +185,18 @@ class _PersonalInfoSection extends StatelessWidget {
               icon: Icons.phone_outlined,
               keyboardType: TextInputType.phone,
             ),
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: () => controller.selectBirthDate(context),
+              child: AbsorbPointer(
+                child: _buildTextField(
+                  controller: controller.birthDateController,
+                  label: 'Birth Date',
+                  icon: Icons.cake_outlined,
+                  readOnly: true,
+                ),
+              ),
+            ),
           ],
         ),
       ),
