@@ -166,51 +166,46 @@ class CourseGradeModel {
   // Get letter grade based on percentage
   String get letterGrade {
     final percent = totalPercentage;
-    if (percent >= 90) return 'A+';
-    if (percent >= 85) return 'A';
-    if (percent >= 80) return 'A-';
-    if (percent >= 77) return 'B+';
-    if (percent >= 73) return 'B';
-    if (percent >= 70) return 'B-';
-    if (percent >= 67) return 'C+';
-    if (percent >= 63) return 'C';
-    if (percent >= 60) return 'C-';
-    if (percent >= 57) return 'D+';
-    if (percent >= 53) return 'D';
-    if (percent >= 50) return 'D-';
+    if (percent >= 80) return 'A+';
+    if (percent >= 75) return 'A';
+    if (percent >= 70) return 'A-';
+    if (percent >= 65) return 'B+';
+    if (percent >= 60) return 'B';
+    if (percent >= 55) return 'B-';
+    if (percent >= 50) return 'C+';
+    if (percent >= 45) return 'C';
+    if (percent >= 40) return 'D';
     return 'F';
   }
 
   // Calculate GPA (4.0 scale)
   double get gpa {
     final percent = totalPercentage;
-    if (percent >= 90) return 4.0;
-    if (percent >= 85) return 3.7;
-    if (percent >= 80) return 3.3;
-    if (percent >= 77) return 3.0;
-    if (percent >= 73) return 2.7;
-    if (percent >= 70) return 2.3;
-    if (percent >= 67) return 2.0;
-    if (percent >= 63) return 1.7;
-    if (percent >= 60) return 1.3;
-    if (percent >= 57) return 1.0;
-    if (percent >= 50) return 0.7;
-    return 0.0;
+    if (percent >= 80) return 4.0; // A+
+    if (percent >= 75) return 3.75; // A
+    if (percent >= 70) return 3.5; // A-
+    if (percent >= 65) return 3.25; // B+
+    if (percent >= 60) return 3.0; // B
+    if (percent >= 55) return 2.75; // B-
+    if (percent >= 50) return 2.50; // C+
+    if (percent >= 45) return 2.25; // C
+    if (percent >= 40) return 2.0; // D
+    return 0.0; // F
   }
 
   // Get grade status
   String get gradeStatus {
     final percent = totalPercentage;
-    if (percent >= 90) return 'Excellent';
-    if (percent >= 80) return 'Very Good';
-    if (percent >= 70) return 'Good';
-    if (percent >= 60) return 'Satisfactory';
-    if (percent >= 50) return 'Pass';
+    if (percent >= 80) return 'Excellent';
+    if (percent >= 70) return 'Very Good';
+    if (percent >= 60) return 'Good';
+    if (percent >= 50) return 'Satisfactory';
+    if (percent >= 40) return 'Pass';
     return 'Fail';
   }
 
   // Check if passing
-  bool get isPassing => totalPercentage >= 50;
+  bool get isPassing => totalPercentage >= 40;
 
   // Get completion percentage (how many components have grades)
   double get completionPercentage {

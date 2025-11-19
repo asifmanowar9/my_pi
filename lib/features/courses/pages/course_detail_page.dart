@@ -997,6 +997,7 @@ class CourseDetailPage extends StatelessWidget {
       final gpa = gradeData['gpa'] as double;
       final letterGrade = gradeData['letterGrade'] as String;
       final percentage = gradeData['percentage'] as double;
+      final totalMarks = gradeData['totalMarks'] as double;
       final status = gradeData['status'] as String;
       final completionPercentage =
           GradeCalculationService.getCompletionPercentage(assessments);
@@ -1067,8 +1068,8 @@ class CourseDetailPage extends StatelessWidget {
                       _buildGradeMetric(
                         context,
                         'Score',
-                        '${percentage.toStringAsFixed(1)}%',
-                        Icons.percent,
+                        '${totalMarks.toStringAsFixed(1)}/100',
+                        Icons.score,
                       ),
                     ],
                   ),

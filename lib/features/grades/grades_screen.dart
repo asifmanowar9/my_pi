@@ -263,7 +263,8 @@ class _CourseGrades extends StatelessWidget {
               .map(
                 (a) => AssignmentGrade(
                   '${a.type.icon} ${a.title}',
-                  a.percentage ?? 0,
+                  a.marks ?? 0,
+                  a.maxMarks ?? 0,
                   a.type.weight,
                 ),
               )
@@ -380,7 +381,7 @@ class _GradeCard extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Assignment Breakdown', style: AppTextStyles.cardSubtitle),
+              Text('Assessment Breakdown', style: AppTextStyles.cardSubtitle),
               const SizedBox(height: 12),
               ...grade.assignments.map(
                 (assignment) => Padding(
@@ -394,18 +395,18 @@ class _GradeCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${assignment.score}% ',
+                        '${assignment.score.toStringAsFixed(assignment.score.truncateToDouble() == assignment.score ? 0 : 1)} / ${assignment.maxScore.toStringAsFixed(assignment.maxScore.truncateToDouble() == assignment.maxScore ? 0 : 1)} ',
                         style: AppTextStyles.caption.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      Text(
-                        '(${assignment.weight}%)',
-                        style: AppTextStyles.caption.copyWith(
-                          color: Get.theme.colorScheme.onSurfaceVariant
-                              .withOpacity(0.7),
-                        ),
-                      ),
+                      // Text(
+                      //   '(${assignment.weight}%)',
+                      //   style: AppTextStyles.caption.copyWith(
+                      //     color: Get.theme.colorScheme.onSurfaceVariant
+                      //         .withOpacity(0.7),
+                      //   ),
+                      // ),
                     ],
                   ),
                 ),
@@ -454,7 +455,8 @@ class GradeData {
 class AssignmentGrade {
   final String name;
   final double score;
+  final double maxScore;
   final double weight;
 
-  AssignmentGrade(this.name, this.score, this.weight);
+  AssignmentGrade(this.name, this.score, this.maxScore, this.weight);
 }

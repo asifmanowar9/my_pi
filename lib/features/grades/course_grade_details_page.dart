@@ -430,13 +430,11 @@ class _GradeTimelineChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final gradedAssessments =
-        assessments.where((a) => a.isGraded && a.dueDate != null).toList()
-          ..sort(
-            (a, b) => (a.dueDate ?? DateTime.now()).compareTo(
-              b.dueDate ?? DateTime.now(),
-            ),
-          );
+    final gradedAssessments = assessments.where((a) => a.isGraded).toList()
+      ..sort(
+        (a, b) =>
+            (a.dueDate ?? a.createdAt).compareTo(b.dueDate ?? b.createdAt),
+      );
 
     if (gradedAssessments.isEmpty) {
       return const SizedBox.shrink();
@@ -486,15 +484,28 @@ class _GradeTimelineChart extends StatelessWidget {
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        reservedSize: 30,
+                        reservedSize: 70,
+                        interval: 1,
                         getTitlesWidget: (value, meta) {
                           final index = value.toInt();
                           if (index >= 0 && index < gradedAssessments.length) {
+                            final assessment = gradedAssessments[index];
+                            // Abbreviate title if too long
+                            String displayTitle = assessment.title;
+                            if (displayTitle.length > 10) {
+                              displayTitle =
+                                  '${displayTitle.substring(0, 8)}..';
+                            }
+
                             return Padding(
                               padding: const EdgeInsets.only(top: 8),
-                              child: Text(
-                                gradedAssessments[index].type.icon,
-                                style: const TextStyle(fontSize: 16),
+                              child: Transform.rotate(
+                                angle: -0.5,
+                                child: Text(
+                                  displayTitle,
+                                  style: const TextStyle(fontSize: 11),
+                                  textAlign: TextAlign.center,
+                                ),
                               ),
                             );
                           }
@@ -548,10 +559,11 @@ class _GradeTimelineChart extends StatelessWidget {
                           if (index >= 0 && index < gradedAssessments.length) {
                             final assessment = gradedAssessments[index];
                             return LineTooltipItem(
-                              '${assessment.title}\n${spot.y.toStringAsFixed(1)}%',
+                              '${assessment.type.displayName} #${index + 1}\n${assessment.title}\n${assessment.marks}/${assessment.maxMarks} (${spot.y.toStringAsFixed(1)}%)',
                               const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
+                                fontSize: 12,
                               ),
                             );
                           }

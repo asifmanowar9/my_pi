@@ -8,6 +8,8 @@ import 'dart:io';
 import '../../courses/models/course_model.dart';
 import '../../courses/models/course_grade_model.dart';
 import '../../courses/controllers/course_controller.dart';
+import '../../courses/controllers/assessment_controller.dart';
+import '../../courses/services/grade_calculation_service.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../../core/database/database_helper_clean.dart'
     as DatabaseHelperClean;
@@ -129,20 +131,25 @@ class TranscriptController extends GetxController {
   ) async {
     final pdf = pw.Document();
     final authController = Get.find<AuthController>();
+    final assessmentController = Get.find<AssessmentController>();
     final user = authController.user;
 
-    // Pre-fetch all grades for courses
-    Map<String, CourseGradeModel?> courseGrades = {};
+    // Calculate grades for courses from assessments
+    Map<String, Map<String, dynamic>> courseGrades = {};
     for (final course in courses) {
       try {
-        final gradeData = await DatabaseHelperClean.DatabaseHelper()
-            .getCourseGrade(course.id);
-        if (gradeData != null) {
-          courseGrades[course.id] = CourseGradeModel.fromJson(gradeData);
+        final courseAssessments = assessmentController.assessments
+            .where((a) => a.courseId == course.id)
+            .toList();
+
+        if (courseAssessments.isNotEmpty) {
+          final gradeData = GradeCalculationService.calculateCourseGrade(
+            courseAssessments,
+          );
+          courseGrades[course.id] = gradeData;
         }
       } catch (e) {
-        print('Error getting grade for course ${course.id}: $e');
-        courseGrades[course.id] = null;
+        print('Error calculating grade for course ${course.id}: $e');
       }
     }
 
@@ -155,15 +162,15 @@ class TranscriptController extends GetxController {
         .where((c) => c.status == 'completed')
         .toList();
 
-    // Calculate GPA
+    // Calculate GPA using the grade data
     double totalGradePoints = 0.0;
     double totalGradeCredits = 0.0;
 
     for (final course in completedCourses) {
-      final gradeModel = courseGrades[course.id];
-      if (gradeModel != null) {
-        final gradePoints = _getGradePoints(gradeModel.totalPercentage);
-        totalGradePoints += gradePoints * course.credits;
+      final gradeData = courseGrades[course.id];
+      if (gradeData != null) {
+        final courseGPA = gradeData['gpa'] as double;
+        totalGradePoints += courseGPA * course.credits;
         totalGradeCredits += course.credits;
       }
     }
@@ -309,7 +316,7 @@ class TranscriptController extends GetxController {
                           ),
                           pw.SizedBox(height: 4),
                           pw.Text(
-                            'Completed Courses: ${completedCourses.length}',
+                            'Completed Courses: ${completedCourses.length}/${courses.length}',
                           ),
                         ],
                       ),
@@ -318,10 +325,13 @@ class TranscriptController extends GetxController {
                       child: pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
-                          pw.Text('Overall GPA: ${gpa.toStringAsFixed(2)}'),
+                          pw.Text(
+                            'Cumulative GPA: ${gpa.toStringAsFixed(2)} / 4.0',
+                            style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                          ),
                           pw.SizedBox(height: 4),
                           pw.Text(
-                            'Grade Credits: ${totalGradeCredits.toStringAsFixed(1)}',
+                            'Graded Credits: ${totalGradeCredits.toStringAsFixed(1)}',
                           ),
                         ],
                       ),
@@ -349,9 +359,10 @@ class TranscriptController extends GetxController {
               0: const pw.FlexColumnWidth(2),
               1: const pw.FlexColumnWidth(3),
               2: const pw.FlexColumnWidth(2),
-              3: const pw.FlexColumnWidth(1.5),
-              4: const pw.FlexColumnWidth(1.5),
-              5: const pw.FlexColumnWidth(1.5),
+              3: const pw.FlexColumnWidth(1.2),
+              4: const pw.FlexColumnWidth(1.2),
+              5: const pw.FlexColumnWidth(1.2),
+              6: const pw.FlexColumnWidth(1.2),
             },
             children: [
               // Header Row
@@ -362,78 +373,137 @@ class TranscriptController extends GetxController {
                     padding: const pw.EdgeInsets.all(8),
                     child: pw.Text(
                       'Course Code',
-                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      style: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 10,
+                      ),
                     ),
                   ),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(8),
                     child: pw.Text(
                       'Course Name',
-                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      style: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 10,
+                      ),
                     ),
                   ),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(8),
                     child: pw.Text(
                       'Instructor',
-                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      style: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 10,
+                      ),
                     ),
                   ),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(8),
                     child: pw.Text(
                       'Credits',
-                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      style: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 10,
+                      ),
                     ),
                   ),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(8),
                     child: pw.Text(
-                      'Grade',
-                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      'Letter',
+                      style: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(8),
+                    child: pw.Text(
+                      'GPA',
+                      style: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 10,
+                      ),
                     ),
                   ),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(8),
                     child: pw.Text(
                       'Status',
-                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      style: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 10,
+                      ),
                     ),
                   ),
                 ],
               ),
               // Course Rows
               ...courses.map((course) {
-                final gradeModel = courseGrades[course.id];
-                final gradeText = gradeModel != null
-                    ? '${gradeModel.totalPercentage.toStringAsFixed(1)}%'
+                final gradeData = courseGrades[course.id];
+                final letterGrade = gradeData != null
+                    ? (gradeData['letterGrade'] as String)
+                    : 'N/A';
+                final gpaText = gradeData != null
+                    ? (gradeData['gpa'] as double).toStringAsFixed(2)
                     : 'N/A';
 
                 return pw.TableRow(
                   children: [
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(8),
-                      child: pw.Text(course.code ?? 'N/A'),
+                      child: pw.Text(
+                        course.code ?? 'N/A',
+                        style: const pw.TextStyle(fontSize: 9),
+                      ),
                     ),
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(8),
-                      child: pw.Text(course.name),
+                      child: pw.Text(
+                        course.name,
+                        style: const pw.TextStyle(fontSize: 9),
+                      ),
                     ),
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(8),
-                      child: pw.Text(course.teacherName),
+                      child: pw.Text(
+                        course.teacherName,
+                        style: const pw.TextStyle(fontSize: 9),
+                      ),
                     ),
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(8),
-                      child: pw.Text(course.credits.toString()),
+                      child: pw.Text(
+                        course.credits.toString(),
+                        style: const pw.TextStyle(fontSize: 9),
+                      ),
                     ),
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(8),
-                      child: pw.Text(gradeText),
+                      child: pw.Text(
+                        letterGrade,
+                        style: pw.TextStyle(
+                          fontSize: 9,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
                     ),
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(8),
-                      child: pw.Text(course.status.toUpperCase()),
+                      child: pw.Text(
+                        gpaText,
+                        style: const pw.TextStyle(fontSize: 9),
+                      ),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(8),
+                      child: pw.Text(
+                        course.status.toUpperCase(),
+                        style: const pw.TextStyle(fontSize: 9),
+                      ),
                     ),
                   ],
                 );
@@ -489,14 +559,6 @@ class TranscriptController extends GetxController {
     if (filename.contains('Completed')) return 'Completed Courses Only';
     if (filename.contains('Selected')) return 'Selected Courses Report';
     return 'Academic Report';
-  }
-
-  double _getGradePoints(double grade) {
-    if (grade >= 90) return 4.0;
-    if (grade >= 80) return 3.0;
-    if (grade >= 70) return 2.0;
-    if (grade >= 60) return 1.0;
-    return 0.0;
   }
 
   Future<void> _savePdf(pw.Document pdf, String filename) async {

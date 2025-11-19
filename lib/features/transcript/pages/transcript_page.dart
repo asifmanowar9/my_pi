@@ -2,22 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../shared/themes/app_text_styles.dart';
 import '../../courses/controllers/course_controller.dart';
+import '../../courses/controllers/assessment_controller.dart';
 import '../../courses/models/course_model.dart';
-import '../../courses/models/course_grade_model.dart';
+import '../../courses/services/grade_calculation_service.dart';
 import '../controllers/transcript_controller.dart';
-import '../../../core/database/database_helper_clean.dart' as DatabaseHelperClean;
 
 class TranscriptPage extends StatelessWidget {
   const TranscriptPage({super.key});
 
-  static Future<CourseGradeModel?> getCourseGrade(String courseId) async {
+  static Map<String, dynamic>? getCourseGrade(String courseId) {
     try {
-      final gradeData = await DatabaseHelperClean.DatabaseHelper().getCourseGrade(courseId);
-      if (gradeData != null) {
-        return CourseGradeModel.fromJson(gradeData);
+      final assessmentController = Get.find<AssessmentController>();
+      final courseAssessments = assessmentController.assessments
+          .where((a) => a.courseId == courseId)
+          .toList();
+
+      if (courseAssessments.isNotEmpty) {
+        return GradeCalculationService.calculateCourseGrade(courseAssessments);
       }
     } catch (e) {
-      print('Error getting grade for course $courseId: $e');
+      print('Error calculating grade for course $courseId: $e');
     }
     return null;
   }
@@ -127,10 +131,7 @@ class TranscriptPage extends StatelessWidget {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Select Courses',
-                          style: AppTextStyles.cardTitle,
-                        ),
+                        Text('Select Courses', style: AppTextStyles.cardTitle),
                         Row(
                           children: [
                             TextButton(
@@ -238,11 +239,7 @@ class _QuickActionCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              Icon(
-                icon,
-                size: 32,
-                color: Get.theme.colorScheme.primary,
-              ),
+              Icon(icon, size: 32, color: Get.theme.colorScheme.primary),
               const SizedBox(height: 8),
               Text(
                 title,
@@ -310,16 +307,17 @@ class _CourseSelectionTile extends StatelessWidget {
                     color: Get.theme.colorScheme.secondary,
                   ),
                 const Spacer(),
-                FutureBuilder<CourseGradeModel?>(
-                  future: TranscriptPage.getCourseGrade(course.id),
-                  builder: (context, snapshot) {
-                    if (snapshot.hasData && snapshot.data != null) {
-                      final grade = snapshot.data!.totalPercentage;
+                Builder(
+                  builder: (context) {
+                    final gradeData = TranscriptPage.getCourseGrade(course.id);
+                    if (gradeData != null) {
+                      final totalMarks = gradeData['totalMarks'] as double;
+                      final letterGrade = gradeData['letterGrade'] as String;
                       return Text(
-                        'Grade: ${grade.toStringAsFixed(1)}%',
+                        'Grade: $letterGrade (${totalMarks.toStringAsFixed(1)}/100)',
                         style: AppTextStyles.caption.copyWith(
                           fontWeight: FontWeight.w600,
-                          color: _getGradeColor(grade),
+                          color: _getLetterGradeColor(letterGrade),
                         ),
                       );
                     }
@@ -355,12 +353,31 @@ class _CourseSelectionTile extends StatelessWidget {
     }
   }
 
-  Color _getGradeColor(double grade) {
-    if (grade >= 90) return Colors.green;
-    if (grade >= 80) return Colors.blue;
-    if (grade >= 70) return Colors.orange;
-    if (grade >= 60) return Colors.red.shade300;
-    return Colors.red;
+  Color _getLetterGradeColor(String letterGrade) {
+    switch (letterGrade) {
+      case 'A+':
+        return Colors.green.shade700;
+      case 'A':
+        return Colors.green.shade600;
+      case 'A-':
+        return Colors.green.shade500;
+      case 'B+':
+        return Colors.blue.shade600;
+      case 'B':
+        return Colors.blue.shade500;
+      case 'B-':
+        return Colors.blue.shade400;
+      case 'C+':
+        return Colors.orange.shade600;
+      case 'C':
+        return Colors.orange.shade500;
+      case 'D':
+        return Colors.deepOrange.shade600;
+      case 'F':
+        return Colors.red.shade700;
+      default:
+        return Colors.grey;
+    }
   }
 }
 
@@ -368,10 +385,7 @@ class _StatusChip extends StatelessWidget {
   final String label;
   final Color color;
 
-  const _StatusChip({
-    required this.label,
-    required this.color,
-  });
+  const _StatusChip({required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
