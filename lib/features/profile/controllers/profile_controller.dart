@@ -1,11 +1,13 @@
 import 'package:get/get.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../shared/services/storage_service.dart';
+import '../../../shared/services/cloud_database_service.dart';
 import '../../auth/controllers/auth_controller.dart';
 
 class ProfileController extends GetxController {
   final AuthController _authController = Get.find<AuthController>();
   final StorageService _storageService = Get.find<StorageService>();
+  CloudDatabaseService? _cloudService;
 
   // Reactive profile data
   final profileData = <String, dynamic>{}.obs;
@@ -17,7 +19,18 @@ class ProfileController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    _initializeCloudService();
     loadProfileData();
+  }
+
+  void _initializeCloudService() {
+    try {
+      if (Get.isRegistered<CloudDatabaseService>()) {
+        _cloudService = Get.find<CloudDatabaseService>();
+      }
+    } catch (e) {
+      print('Cloud service not available: $e');
+    }
   }
 
   Future<void> loadProfileData() async {
@@ -26,10 +39,44 @@ class ProfileController extends GetxController {
 
       final user = currentUser;
       if (user != null) {
-        final data = _storageService.getProfileData(user.uid);
-        if (data != null) {
-          profileData.value = data;
+        // First, try to get updated data from cloud
+        if (_cloudService != null) {
+          try {
+            print('📥 Syncing profile from cloud...');
+            final cloudData = await _cloudService!.getUserProfile();
+
+            if (cloudData != null) {
+              // Save cloud data to local storage
+              _storageService.saveProfileData(user.uid, cloudData);
+              profileData.value = cloudData;
+              print('✅ Profile synced from cloud');
+            } else {
+              // No cloud data, load from local
+              final localData = _storageService.getProfileData(user.uid);
+              if (localData != null) {
+                profileData.value = localData;
+                print('📱 Profile loaded from local storage');
+              }
+            }
+          } catch (e) {
+            print('⚠️ Failed to sync from cloud, using local data: $e');
+            // Fallback to local data
+            final localData = _storageService.getProfileData(user.uid);
+            if (localData != null) {
+              profileData.value = localData;
+            }
+          }
+        } else {
+          // No cloud service, load from local
+          final data = _storageService.getProfileData(user.uid);
+          if (data != null) {
+            profileData.value = data;
+            print('📱 Profile loaded from local storage');
+          }
         }
+
+        // Trigger UI update
+        update();
       }
     } catch (e) {
       print('Error loading profile data: $e');
@@ -82,7 +129,8 @@ class ProfileController extends GetxController {
     return '${date.day} ${months[date.month]} ${date.year}';
   }
 
-  void refreshProfileData() {
-    loadProfileData();
+  Future<void> refreshProfileData() async {
+    await loadProfileData();
+    update();
   }
 }

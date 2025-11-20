@@ -352,7 +352,92 @@ class AssessmentController extends GetxController {
     }
   }
 
-  // Sync unsynced assessments to Firebase
+  // Sync FROM cloud - Download assessments from Firestore to local database
+  Future<void> syncFromCloud() async {
+    if (!_isAuthenticated || _cloudService == null) {
+      print(
+        '📍 Cannot sync from cloud: User not authenticated or cloud service unavailable',
+      );
+      return;
+    }
+
+    try {
+      print('🔄 Syncing assessments FROM cloud...');
+
+      // Get current user ID
+      String? currentUserId = _authController?.user?.uid;
+      if (currentUserId == null) {
+        print('❌ No current user ID available, skipping sync');
+        return;
+      }
+
+      // Get assessments from cloud
+      final cloudAssessments = await _cloudService!.getCloudDataForSync(
+        'assessments',
+      );
+      print('📥 Found ${cloudAssessments.length} assessments in cloud');
+
+      int downloadedCount = 0;
+      for (final assessmentData in cloudAssessments) {
+        try {
+          final assessmentId = assessmentData['id'] as String;
+
+          // Convert Firestore Timestamp fields to ISO8601 strings for SQLite
+          final processedData = _convertFirestoreToSQLite(assessmentData);
+
+          // Check if assessment exists locally
+          final existingAssessment = await _dbHelper.getAssessmentById(
+            assessmentId,
+          );
+
+          if (existingAssessment == null) {
+            // Insert new assessment from cloud
+            await _dbHelper.insertAssessment(processedData);
+            downloadedCount++;
+            print('✅ Downloaded new assessment: ${processedData['title']}');
+          } else {
+            // Update existing assessment if cloud version is newer
+            final localUpdatedAt = DateTime.parse(
+              existingAssessment['updated_at'] as String? ??
+                  existingAssessment['createdAt'] as String? ??
+                  DateTime.now().toIso8601String(),
+            );
+
+            DateTime cloudUpdatedAt;
+            if (assessmentData['updatedAt'] != null) {
+              cloudUpdatedAt = (assessmentData['updatedAt'] as dynamic)
+                  .toDate();
+            } else if (assessmentData['updated_at'] != null) {
+              cloudUpdatedAt = DateTime.parse(
+                assessmentData['updated_at'] as String,
+              );
+            } else {
+              cloudUpdatedAt = DateTime.now();
+            }
+
+            if (cloudUpdatedAt.isAfter(localUpdatedAt)) {
+              await _dbHelper.updateAssessment(assessmentId, processedData);
+              downloadedCount++;
+              print(
+                '✅ Updated assessment from cloud: ${processedData['title']}',
+              );
+            }
+          }
+        } catch (e) {
+          print('❌ Failed to process assessment ${assessmentData['id']}: $e');
+        }
+      }
+
+      print('🎉 Sync from cloud complete: $downloadedCount assessments synced');
+
+      // Reload assessments to update UI
+      await loadAssessments(currentUserId);
+    } catch (e) {
+      print('❌ Failed to sync assessments from cloud: $e');
+    }
+  }
+
+  // Sync unsynced assessments TO Firebase (upload local changes)
   Future<void> syncUnsyncedAssessments() async {
     if (!_isAuthenticated || _cloudService == null) {
       print(
@@ -362,7 +447,7 @@ class AssessmentController extends GetxController {
     }
 
     try {
-      print('🔄 Starting assessment sync to Firebase...');
+      print('🔄 Starting assessment sync TO Firebase...');
 
       // Get current user ID from AuthController
       String? currentUserId;
@@ -383,7 +468,8 @@ class AssessmentController extends GetxController {
       int syncedCount = 0;
       for (final assessmentData in localAssessments) {
         try {
-          await _cloudService!.createAssessment(assessmentData);
+          // Use upsert to update existing or create new
+          await _cloudService!.upsertAssessment(assessmentData);
           syncedCount++;
           print('✅ Synced assessment: ${assessmentData['title']}');
         } catch (e) {
@@ -410,5 +496,47 @@ class AssessmentController extends GetxController {
         snackPosition: SnackPosition.BOTTOM,
       );
     }
+  }
+
+  /// Converts Firestore Timestamp fields to ISO8601 strings for SQLite compatibility
+  Map<String, dynamic> _convertFirestoreToSQLite(Map<String, dynamic> data) {
+    final converted = Map<String, dynamic>.from(data);
+
+    // Convert Firestore Timestamps to ISO8601 strings
+    final timestampFields = [
+      'createdAt',
+      'updatedAt',
+      'created_at',
+      'updated_at',
+      'dueDate',
+      'due_date',
+      'completedDate',
+      'completed_date',
+    ];
+
+    for (final field in timestampFields) {
+      if (converted.containsKey(field) && converted[field] != null) {
+        try {
+          if (converted[field] is String) {
+            // Already a string, keep it
+            continue;
+          }
+          // Convert Firestore Timestamp to DateTime to ISO8601 String
+          final timestamp = converted[field] as dynamic;
+          final dateTime = timestamp.toDate() as DateTime;
+          converted[field] = dateTime.toIso8601String();
+        } catch (e) {
+          print('⚠️ Failed to convert timestamp field $field: $e');
+        }
+      }
+    }
+
+    // Remove Firestore-specific fields that don't exist in SQLite schema
+    converted.remove('createdAt');
+    converted.remove('updatedAt');
+    converted.remove('syncStatus');
+    converted.remove('user_id'); // Assessments don't have user_id in SQLite
+
+    return converted;
   }
 }

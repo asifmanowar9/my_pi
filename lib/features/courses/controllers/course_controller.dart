@@ -691,6 +691,28 @@ class CourseController extends GetxController {
     }
   }
 
+  Future<void> forceSyncAllToCloud() async {
+    try {
+      _isSyncing.value = true;
+      await _courseService.forceSyncAllToCloud();
+
+      // Update last sync date
+      final today = DateTime.now();
+      final todayString =
+          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      _lastSyncDate.value = todayString;
+      await _saveLastSyncDate(todayString);
+
+      _showSuccessSnackbar('All courses force synced to cloud successfully');
+      await loadCourses();
+      await loadStatistics();
+    } catch (e) {
+      _showErrorSnackbar('Force Sync Failed', e.toString());
+    } finally {
+      _isSyncing.value = false;
+    }
+  }
+
   Future<void> syncCourseToCloud(String courseId) async {
     try {
       await _courseService.syncToCloud();

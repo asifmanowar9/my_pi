@@ -83,7 +83,8 @@ class CourseService extends GetxService {
           );
           print('🌩️ Cloud service available: ${_cloudService != null}');
 
-          await _cloudService!.createCourse(courseData);
+          // Use upsert to handle both create and update
+          await _cloudService!.upsertCourse(courseData);
           print('✅ Course synced to cloud successfully');
 
           // Update local record to mark as synced
@@ -178,11 +179,12 @@ class CourseService extends GetxService {
         whereArgs: userId.isNotEmpty ? [course.id, userId] : [course.id],
       );
 
-      // Optional cloud backup for authenticated users
+      // Optional cloud sync for authenticated users
       if (_safeAuthController?.isAuthenticated == true &&
           _cloudService != null) {
         try {
-          await _cloudService!.updateCourse(course.id, courseData);
+          // Use upsert to handle both create and update
+          await _cloudService!.upsertCourse(courseData);
           // Update local record to mark as synced
           await db.update(
             'courses',
@@ -269,7 +271,8 @@ class CourseService extends GetxService {
   // Cloud Synchronization Methods
 
   /// Syncs unsynced local courses to cloud
-  Future<void> syncToCloud() async {
+  /// Set [forceAll] to true to sync all courses regardless of sync status
+  Future<void> syncToCloud({bool forceAll = false}) async {
     if (_safeAuthController?.isAuthenticated != true || _cloudService == null) {
       print(
         '⚠️ Sync skipped - Auth: ${_safeAuthController?.isAuthenticated}, Cloud: ${_cloudService != null}',
@@ -278,35 +281,50 @@ class CourseService extends GetxService {
     }
 
     try {
-      print('🔄 Starting sync to cloud...');
+      print('🔄 Starting sync to cloud (forceAll: $forceAll)...');
       final db = await _databaseHelper.database;
       final userId = _currentUserId;
       print('👤 User ID: $userId');
 
-      String whereClause = 'is_synced = ?';
-      List<dynamic> whereArgs = [0];
+      String? whereClause;
+      List<dynamic>? whereArgs;
 
-      if (userId.isNotEmpty) {
-        whereClause = '$whereClause AND user_id = ?';
-        whereArgs.add(userId);
+      if (!forceAll) {
+        // Only sync unsynced courses
+        whereClause = 'is_synced = ?';
+        whereArgs = [0];
+
+        if (userId.isNotEmpty) {
+          whereClause = '$whereClause AND user_id = ?';
+          whereArgs.add(userId);
+        }
+      } else {
+        // Sync all courses for this user
+        if (userId.isNotEmpty) {
+          whereClause = 'user_id = ?';
+          whereArgs = [userId];
+        }
       }
 
-      print('📊 Query: WHERE $whereClause WITH args: $whereArgs');
+      print(
+        '📊 Query: WHERE ${whereClause ?? "ALL"} WITH args: ${whereArgs ?? "NONE"}',
+      );
 
-      final List<Map<String, dynamic>> unsyncedCourses = await db.query(
+      final List<Map<String, dynamic>> coursesToSync = await db.query(
         'courses',
         where: whereClause,
         whereArgs: whereArgs,
       );
 
-      print('📝 Found ${unsyncedCourses.length} unsynced courses');
+      print('📝 Found ${coursesToSync.length} courses to sync');
 
-      for (final courseData in unsyncedCourses) {
+      for (final courseData in coursesToSync) {
         try {
           print(
             '⬆️ Syncing course: ${courseData['name']} (${courseData['id']})',
           );
-          await _cloudService!.createCourse(courseData);
+          // Use upsert to update existing or create new
+          await _cloudService!.upsertCourse(courseData);
 
           // Mark as synced
           await db.update(
@@ -330,63 +348,131 @@ class CourseService extends GetxService {
     }
   }
 
+  /// Forces sync of ALL courses to cloud (useful for fixing sync issues)
+  Future<void> forceSyncAllToCloud() async {
+    print('🔄 FORCE SYNC: Syncing all courses to cloud...');
+    await syncToCloud(forceAll: true);
+  }
+
   /// Syncs courses from cloud to local database
   Future<void> syncFromCloud() async {
+    print('\n========== SYNC FROM CLOUD STARTED ==========');
+    print('🔐 Auth check: ${_safeAuthController?.isAuthenticated}');
+    print('☁️ Cloud service: ${_cloudService != null}');
+
     if (_safeAuthController?.isAuthenticated != true || _cloudService == null) {
+      print(
+        '❌ Sync aborted - Auth: ${_safeAuthController?.isAuthenticated}, Cloud: ${_cloudService != null}',
+      );
       return;
     }
 
     try {
-      final cloudCourses = await _cloudService!.getCloudDataForSync('courses');
-      final db = await _databaseHelper.database;
       final userId = _currentUserId;
+      print('👤 Current user ID: $userId');
 
+      print('📡 Fetching courses from Firestore...');
+      final cloudCourses = await _cloudService!.getCloudDataForSync('courses');
+      print('📦 Retrieved ${cloudCourses.length} courses from Firestore');
+
+      if (cloudCourses.isEmpty) {
+        print('⚠️ No courses found in Firestore for any user');
+        print('💡 This could mean:');
+        print('   1. You haven\'t added any courses yet');
+        print('   2. Courses exist but belong to a different user_id');
+        print('   3. Firestore rules are blocking access');
+        print('🔍 Current user ID: $userId');
+      } else {
+        // Log each course to see what data we got
+        for (var i = 0; i < cloudCourses.length; i++) {
+          final course = cloudCourses[i];
+          print('  Course $i:');
+          print('    - id: ${course['id']}');
+          print('    - name: ${course['name']}');
+          print('    - user_id: ${course['user_id']}');
+          print('    - matches current user: ${course['user_id'] == userId}');
+        }
+      }
+
+      final db = await _databaseHelper.database;
+      print('💾 Database ready');
+      print('📥 Processing ${cloudCourses.length} courses...');
+
+      int downloadedCount = 0;
       for (final courseData in cloudCourses) {
         // Skip courses that don't belong to current user
         if (userId.isNotEmpty && courseData['user_id'] != userId) {
+          print(
+            '⏭️ Skipping course ${courseData['id']} - belongs to different user',
+          );
           continue;
         }
 
-        // Check if course exists locally
-        final existing = await db.query(
-          'courses',
-          where: userId.isNotEmpty ? 'id = ? AND user_id = ?' : 'id = ?',
-          whereArgs: userId.isNotEmpty
-              ? [courseData['id'], userId]
-              : [courseData['id']],
-        );
+        try {
+          // Convert Firestore Timestamp fields to ISO8601 strings for SQLite
+          final processedData = _convertFirestoreToSQLite(courseData);
 
-        if (existing.isEmpty) {
-          // Insert new course
-          await db.insert('courses', {
-            ...courseData,
-            'is_synced': 1,
-            'last_sync_at': DateTime.now().toIso8601String(),
-          });
-        } else {
-          // Update existing course if cloud version is newer
-          final localUpdatedAt = DateTime.parse(
-            existing.first['updated_at'] as String,
+          // Check if course exists locally
+          final existing = await db.query(
+            'courses',
+            where: userId.isNotEmpty ? 'id = ? AND user_id = ?' : 'id = ?',
+            whereArgs: userId.isNotEmpty
+                ? [processedData['id'], userId]
+                : [processedData['id']],
           );
-          final cloudUpdatedAt = courseData['updatedAt'] != null
-              ? (courseData['updatedAt'] as dynamic).toDate()
-              : DateTime.now();
 
-          if (cloudUpdatedAt.isAfter(localUpdatedAt)) {
-            await db.update(
-              'courses',
-              {
-                ...courseData,
-                'is_synced': 1,
-                'last_sync_at': DateTime.now().toIso8601String(),
-              },
-              where: 'id = ?',
-              whereArgs: [courseData['id']],
+          if (existing.isEmpty) {
+            // Insert new course
+            await db.insert('courses', {
+              ...processedData,
+              'is_synced': 1,
+              'last_sync_at': DateTime.now().toIso8601String(),
+            });
+            downloadedCount++;
+            print('✅ Downloaded new course: ${processedData['name']}');
+          } else {
+            // Update existing course if cloud version is newer
+            final localUpdatedAt = DateTime.parse(
+              existing.first['updated_at'] as String,
             );
+
+            DateTime cloudUpdatedAt;
+            if (courseData['updatedAt'] != null) {
+              cloudUpdatedAt = (courseData['updatedAt'] as dynamic).toDate();
+            } else if (courseData['updated_at'] != null) {
+              cloudUpdatedAt = DateTime.parse(
+                courseData['updated_at'] as String,
+              );
+            } else {
+              cloudUpdatedAt = DateTime.now();
+            }
+
+            if (cloudUpdatedAt.isAfter(localUpdatedAt)) {
+              await db.update(
+                'courses',
+                {
+                  ...processedData,
+                  'is_synced': 1,
+                  'last_sync_at': DateTime.now().toIso8601String(),
+                },
+                where: 'id = ?',
+                whereArgs: [processedData['id']],
+              );
+              downloadedCount++;
+              print('✅ Updated course from cloud: ${processedData['name']}');
+            }
           }
+        } catch (e) {
+          print('❌ Failed to process course ${courseData['id']}: $e');
         }
       }
-    } catch (e) {
+
+      print('🎉 Sync from cloud complete: $downloadedCount courses synced');
+      print('========== SYNC FROM CLOUD COMPLETED ==========\n');
+    } catch (e, stackTrace) {
+      print('❌ ERROR in syncFromCloud: $e');
+      print('📍 Stack trace: $stackTrace');
+      print('========== SYNC FROM CLOUD FAILED ==========\n');
       throw Exception('Failed to sync courses from cloud: $e');
     }
   }
@@ -710,5 +796,48 @@ class CourseService extends GetxService {
     } catch (e) {
       return false;
     }
+  }
+
+  /// Converts Firestore Timestamp fields to ISO8601 strings for SQLite compatibility
+  Map<String, dynamic> _convertFirestoreToSQLite(Map<String, dynamic> data) {
+    final converted = Map<String, dynamic>.from(data);
+
+    // Convert Firestore Timestamps to ISO8601 strings
+    final timestampFields = [
+      'createdAt',
+      'updatedAt',
+      'created_at',
+      'updated_at',
+      'startDate',
+      'start_date',
+      'endDate',
+      'end_date',
+      'lastSyncAt',
+      'last_sync_at',
+    ];
+
+    for (final field in timestampFields) {
+      if (converted.containsKey(field) && converted[field] != null) {
+        try {
+          if (converted[field] is String) {
+            // Already a string, keep it
+            continue;
+          }
+          // Convert Firestore Timestamp to DateTime to ISO8601 String
+          final timestamp = converted[field] as dynamic;
+          final dateTime = timestamp.toDate() as DateTime;
+          converted[field] = dateTime.toIso8601String();
+        } catch (e) {
+          print('⚠️ Failed to convert timestamp field $field: $e');
+        }
+      }
+    }
+
+    // Remove Firestore-specific fields that don't exist in SQLite schema
+    converted.remove('createdAt');
+    converted.remove('updatedAt');
+    converted.remove('syncStatus');
+
+    return converted;
   }
 }

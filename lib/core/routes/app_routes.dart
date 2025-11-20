@@ -15,6 +15,7 @@ import '../../features/auth/pages/login_page.dart';
 import '../../features/auth/pages/register_page.dart';
 import '../../features/auth/pages/welcome_page.dart';
 import '../../features/auth/pages/forgot_password_page.dart';
+import '../../features/auth/pages/email_verification_page.dart';
 import '../../shared/widgets/notification_debug_page.dart';
 
 class AppRoutes {
@@ -24,6 +25,7 @@ class AppRoutes {
   static const String register = '/register';
   static const String welcome = '/welcome';
   static const String forgotPassword = '/forgot-password';
+  static const String emailVerification = '/email-verification';
   static const String main = '/main';
   static const String home = '/home';
   static const String courses = '/courses';
@@ -83,6 +85,12 @@ class AppRoutes {
     GetPage(
       name: forgotPassword,
       page: () => const ForgotPasswordPage(),
+      transition: Transition.rightToLeft,
+      transitionDuration: const Duration(milliseconds: 300),
+    ),
+    GetPage(
+      name: emailVerification,
+      page: () => const EmailVerificationPage(),
       transition: Transition.rightToLeft,
       transitionDuration: const Duration(milliseconds: 300),
     ),
@@ -224,6 +232,7 @@ class AppRoutes {
   static void toLogin() => Get.toNamed(login);
   static void toRegister() => Get.toNamed(register);
   static void toForgotPassword() => Get.toNamed(forgotPassword);
+  static void toEmailVerification() => Get.offAllNamed(emailVerification);
   static void toMain() => Get.offAllNamed(main);
   static void toSettings() => Get.toNamed(settings);
 

@@ -41,7 +41,6 @@ class AuthService extends BaseService {
   Future<UserModel?> signInWithEmailAndPassword({
     required String email,
     required String password,
-    bool requireEmailVerification = true,
   }) async {
     try {
       final credential = await _auth.signInWithEmailAndPassword(
@@ -50,13 +49,33 @@ class AuthService extends BaseService {
       );
 
       if (credential.user != null) {
-        // Check email verification if required
-        if (requireEmailVerification && !credential.user!.emailVerified) {
+        // Always require email verification for email/password sign-in
+        if (!credential.user!.emailVerified) {
+          // Sign out the user since they haven't verified
+          await _auth.signOut();
           throw const EmailNotVerifiedException();
         }
 
         final userModel = UserModel.fromFirebaseUser(credential.user!);
-        await _updateUserInFirestore(userModel);
+
+        // Check if user document exists in Firestore
+        if (Get.isRegistered<FirebaseService>()) {
+          final firestore = FirebaseFirestore.instance;
+          final docSnapshot = await firestore
+              .collection('users')
+              .doc(credential.user!.uid)
+              .get();
+
+          if (!docSnapshot.exists) {
+            // First login after verification - create the document
+            await _createUserInFirestore(userModel);
+            debugPrint('✅ Created Firestore document for newly verified user');
+          } else {
+            // Update existing document
+            await _updateUserInFirestore(userModel);
+          }
+        }
+
         return userModel;
       }
       return null;
@@ -76,7 +95,6 @@ class AuthService extends BaseService {
     required String email,
     required String password,
     required String name,
-    bool sendEmailVerification = true,
   }) async {
     try {
       final credential = await _auth.createUserWithEmailAndPassword(
@@ -88,16 +106,20 @@ class AuthService extends BaseService {
         // Update display name
         await credential.user!.updateDisplayName(name);
 
-        // Send email verification if requested
-        if (sendEmailVerification && !credential.user!.emailVerified) {
-          await credential.user!.sendEmailVerification();
-        }
+        // Always send email verification for email/password registration
+        await credential.user!.sendEmailVerification();
 
         final userModel = UserModel.fromFirebaseUser(
           credential.user!,
         ).copyWith(name: name);
 
-        await _createUserInFirestore(userModel);
+        // Don't create Firestore document until email is verified
+        // The document will be created on first successful sign-in
+        debugPrint('✉️ Verification email sent to: ${credential.user!.email}');
+        debugPrint(
+          '⏳ Firestore document will be created after email verification',
+        );
+
         return userModel;
       }
       return null;
@@ -111,7 +133,7 @@ class AuthService extends BaseService {
     }
   }
 
-  // Google Sign-In
+  // Google Sign-In (Email verification not required - Google already verifies emails)
   Future<UserModel?> signInWithGoogle() async {
     try {
       debugPrint('🔄 Starting Google Sign-In process...');
@@ -149,16 +171,22 @@ class AuthService extends BaseService {
         );
         final userModel = UserModel.fromFirebaseUser(authResult.user!);
 
-        // Create or update user in Firestore
+        // Google users are already verified by Google - create/update Firestore immediately
         if (authResult.additionalUserInfo?.isNewUser == true) {
-          debugPrint('🆕 New user detected, creating Firestore document');
+          debugPrint(
+            '🆕 New Google user detected, creating Firestore document',
+          );
           await _createUserInFirestore(userModel);
         } else {
-          debugPrint('👤 Existing user detected, updating Firestore document');
+          debugPrint(
+            '👤 Existing Google user detected, updating Firestore document',
+          );
           await _updateUserInFirestore(userModel);
         }
 
-        debugPrint('✅ Google Sign-In completed successfully');
+        debugPrint(
+          '✅ Google Sign-In completed successfully (no email verification required)',
+        );
         return userModel;
       }
 

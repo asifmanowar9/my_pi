@@ -16,7 +16,13 @@ class ProfileScreen extends StatelessWidget {
 
     // Initialize ProfileController if user is authenticated
     if (isAuthenticated) {
-      Get.put(ProfileController());
+      // Get or create controller
+      final controller = Get.put(ProfileController());
+
+      // Refresh data when screen is built (coming back from edit)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        controller.refreshProfileData();
+      });
     }
 
     return Scaffold(
@@ -29,22 +35,31 @@ class ProfileScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _ProfileHeader(authController: authController),
-            const SizedBox(height: 24),
-            // Only show academic info and quick actions if authenticated
-            if (isAuthenticated) ...[
-              const _AcademicInfo(),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          if (isAuthenticated) {
+            final controller = Get.find<ProfileController>();
+            await controller.refreshProfileData();
+          }
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ProfileHeader(authController: authController),
               const SizedBox(height: 24),
-              _QuickActions(authController: authController),
-              const SizedBox(height: 24),
+              // Only show academic info and quick actions if authenticated
+              if (isAuthenticated) ...[
+                const _AcademicInfo(),
+                const SizedBox(height: 24),
+                _QuickActions(authController: authController),
+                const SizedBox(height: 24),
+              ],
+              const _PreferencesSection(),
             ],
-            const _PreferencesSection(),
-          ],
+          ),
         ),
       ),
     );

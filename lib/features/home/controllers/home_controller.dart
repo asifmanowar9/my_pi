@@ -2,6 +2,8 @@ import 'package:get/get.dart';
 import '../../../core/database/database_helper_clean.dart';
 import '../../../features/auth/controllers/auth_controller.dart';
 import '../../../shared/models/assignment.dart';
+import '../../courses/controllers/assessment_controller.dart';
+import '../../courses/services/course_service.dart';
 
 class HomeController extends GetxController {
   final DatabaseHelper _databaseHelper = Get.find<DatabaseHelper>();
@@ -29,7 +31,12 @@ class HomeController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    loadData();
+    _initializeController();
+  }
+
+  Future<void> _initializeController() async {
+    await _migrateExistingDataToUser();
+    await loadData();
   }
 
   Future<void> loadData() async {
@@ -45,6 +52,90 @@ class HomeController extends GetxController {
       print('Error loading home data: $e');
     } finally {
       isLoading.value = false;
+    }
+  }
+
+  /// Migrate existing courses/assignments without user_id to current user
+  Future<void> _migrateExistingDataToUser() async {
+    try {
+      print('🔄 Starting migration check...');
+      final userId = _currentUserId;
+
+      if (userId.isEmpty) {
+        print('⏭️ No user ID, skipping migration');
+        return;
+      }
+
+      print('👤 Migration user ID: $userId');
+      final db = await _databaseHelper.database;
+
+      // First, let's see ALL courses and their user_ids for debugging
+      final allCourses = await db.query('courses');
+      print('📊 Total courses in DB: ${allCourses.length}');
+      for (var course in allCourses) {
+        print(
+          '  - ${course['name']}: user_id=${course['user_id']}, synced=${course['is_synced']}',
+        );
+      }
+
+      // Only migrate courses without user_id (NULL or empty) - NOT courses from other users
+      final coursesWithoutUser = await db.query(
+        'courses',
+        where: 'user_id IS NULL OR user_id = ""',
+      );
+
+      print('📊 Found ${coursesWithoutUser.length} courses without user_id');
+
+      if (coursesWithoutUser.isNotEmpty) {
+        print(
+          '🔄 Migrating ${coursesWithoutUser.length} courses to user: $userId',
+        );
+
+        for (var course in coursesWithoutUser) {
+          print('  - Migrating: ${course['name']}');
+        }
+
+        final updateCount = await db.update('courses', {
+          'user_id': userId,
+          'is_synced': 0,
+          'updated_at': DateTime.now().toIso8601String(),
+        }, where: 'user_id IS NULL OR user_id = ""');
+        print('✅ Migrated $updateCount courses to current user');
+      } else {
+        print('ℹ️ No courses need migration');
+      }
+
+      // Migrate assignments without user_id (through their courses)
+      final assignmentsWithoutUser = await db.rawQuery('''
+        SELECT a.id FROM assignments a
+        LEFT JOIN courses c ON a.course_id = c.id
+        WHERE c.user_id IS NULL OR c.user_id = ""
+      ''');
+
+      if (assignmentsWithoutUser.isNotEmpty) {
+        print(
+          '🔄 Found ${assignmentsWithoutUser.length} assignments needing migration',
+        );
+      }
+
+      // Migrate assessments without proper user association (through their courses)
+      final assessmentsWithoutUser = await db.rawQuery('''
+        SELECT a.id FROM assessments a
+        LEFT JOIN courses c ON a.course_id = c.id
+        WHERE c.user_id IS NULL OR c.user_id = ""
+      ''');
+
+      if (assessmentsWithoutUser.isNotEmpty) {
+        print(
+          '🔄 Found ${assessmentsWithoutUser.length} assessments linked to migrated courses',
+        );
+      }
+
+      print('✅ Migration check completed');
+    } catch (e) {
+      print('⚠️ Error during data migration: $e');
+      print('Stack trace: ${StackTrace.current}');
+      // Don't throw - allow app to continue
     }
   }
 
@@ -230,7 +321,9 @@ class HomeController extends GetxController {
       );
       print('Total courses in DB: ${allCourses.length}');
       for (var c in allCourses) {
-        print('  - ${c['name']}: schedule=${c['schedule']}, status=${c['status']}');
+        print(
+          '  - ${c['name']}: schedule=${c['schedule']}, status=${c['status']}',
+        );
       }
 
       List<Map<String, dynamic>> result;
@@ -468,6 +561,57 @@ class HomeController extends GetxController {
 
   @override
   Future<void> refresh() async {
+    // Sync from cloud first to get latest data from other devices
+    await _syncFromCloud();
+    // Then reload local data
     await loadData();
+  }
+
+  Future<void> _syncFromCloud() async {
+    try {
+      // Check if user is authenticated
+      final authController = Get.find<AuthController>();
+      if (!authController.isAuthenticated) {
+        print('⏭️ User not authenticated, skipping cloud sync');
+        return;
+      }
+
+      print('🔄 Starting cloud sync from home screen refresh...');
+
+      // Sync courses from cloud using CourseService (more reliable than controller)
+      if (Get.isRegistered<CourseService>()) {
+        try {
+          print('📚 CourseService found, syncing courses...');
+          final courseService = Get.find<CourseService>();
+          await courseService.syncFromCloud();
+          print('✅ Courses synced from cloud');
+        } catch (e) {
+          print('⚠️ Failed to sync courses: $e');
+        }
+      } else {
+        print('⚠️ CourseService not registered, skipping course sync');
+      }
+
+      // Sync assessments from cloud using AssessmentController
+      if (Get.isRegistered<AssessmentController>()) {
+        try {
+          print('📋 AssessmentController found, syncing assessments...');
+          final assessmentController = Get.find<AssessmentController>();
+          await assessmentController.syncFromCloud();
+          print('✅ Assessments synced from cloud');
+        } catch (e) {
+          print('⚠️ Failed to sync assessments: $e');
+        }
+      } else {
+        print(
+          '⚠️ AssessmentController not registered, skipping assessment sync',
+        );
+      }
+
+      print('🎉 Cloud sync completed');
+    } catch (e) {
+      print('⚠️ Cloud sync failed: $e');
+      // Don't show error to user - sync is a background operation
+    }
   }
 }

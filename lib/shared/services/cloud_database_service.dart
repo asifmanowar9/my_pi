@@ -11,7 +11,7 @@ class CloudDatabaseService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Collection references with user isolation
+  // Collection references - nested structure under users/{userId}
   String get _userId => _auth.currentUser?.uid ?? '';
 
   CollectionReference get _coursesCollection =>
@@ -25,6 +25,8 @@ class CloudDatabaseService {
 
   CollectionReference get _gradesCollection =>
       _firestore.collection('users').doc(_userId).collection('grades');
+
+  CollectionReference get _usersCollection => _firestore.collection('users');
 
   // 6. Offline persistence configuration
   Future<void> enableOfflinePersistence() async {
@@ -51,7 +53,7 @@ class CloudDatabaseService {
         ...courseData,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-        'userId': _userId,
+        'user_id': _userId,
         'syncStatus': 'synced',
       });
 
@@ -89,6 +91,47 @@ class CloudDatabaseService {
       });
     } catch (e) {
       throw Exception('Failed to update course: $e');
+    }
+  }
+
+  // Upsert course (create or update)
+  Future<String> upsertCourse(Map<String, dynamic> courseData) async {
+    try {
+      final courseId = courseData['id'] as String?;
+
+      if (courseId == null || courseId.isEmpty) {
+        // No ID provided, create new course
+        return await createCourse(courseData);
+      }
+
+      // Check if course exists in cloud
+      final existingDoc = await _coursesCollection.doc(courseId).get();
+
+      if (existingDoc.exists) {
+        // Update existing course
+        print('🔄 Updating existing course in Firebase: $courseId');
+        await _coursesCollection.doc(courseId).set({
+          ...courseData,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'syncStatus': 'synced',
+        }, SetOptions(merge: true));
+        print('✅ Course updated in Firebase: $courseId');
+        return courseId;
+      } else {
+        // Create new course with the provided ID
+        print('📝 Creating new course in Firebase with ID: $courseId');
+        await _coursesCollection.doc(courseId).set({
+          ...courseData,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+          'syncStatus': 'synced',
+        });
+        print('✅ Course created in Firebase: $courseId');
+        return courseId;
+      }
+    } catch (e) {
+      print('❌ Failed to upsert course in Firebase: $e');
+      throw Exception('Failed to upsert course: $e');
     }
   }
 
@@ -223,7 +266,7 @@ class CloudDatabaseService {
         ...assessmentData,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-        'userId': _userId,
+        'user_id': _userId,
         'syncStatus': 'synced',
       });
 
@@ -261,6 +304,47 @@ class CloudDatabaseService {
       });
     } catch (e) {
       throw Exception('Failed to update assessment: $e');
+    }
+  }
+
+  // Upsert assessment (create or update)
+  Future<String> upsertAssessment(Map<String, dynamic> assessmentData) async {
+    try {
+      final assessmentId = assessmentData['id'] as String?;
+
+      if (assessmentId == null || assessmentId.isEmpty) {
+        // No ID provided, create new assessment
+        return await createAssessment(assessmentData);
+      }
+
+      // Check if assessment exists in cloud
+      final existingDoc = await _assessmentsCollection.doc(assessmentId).get();
+
+      if (existingDoc.exists) {
+        // Update existing assessment
+        print('🔄 Updating existing assessment in Firebase: $assessmentId');
+        await _assessmentsCollection.doc(assessmentId).set({
+          ...assessmentData,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'syncStatus': 'synced',
+        }, SetOptions(merge: true));
+        print('✅ Assessment updated in Firebase: $assessmentId');
+        return assessmentId;
+      } else {
+        // Create new assessment with the provided ID
+        print('📝 Creating new assessment in Firebase with ID: $assessmentId');
+        await _assessmentsCollection.doc(assessmentId).set({
+          ...assessmentData,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+          'syncStatus': 'synced',
+        });
+        print('✅ Assessment created in Firebase: $assessmentId');
+        return assessmentId;
+      }
+    } catch (e) {
+      print('❌ Failed to upsert assessment in Firebase: $e');
+      throw Exception('Failed to upsert assessment: $e');
     }
   }
 
@@ -553,7 +637,6 @@ class CloudDatabaseService {
 
         final syncData = {
           ...data,
-          'userId': _userId,
           'syncStatus': 'synced',
           'lastSyncAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
@@ -574,17 +657,25 @@ class CloudDatabaseService {
     DateTime? since,
   }) async {
     try {
+      print('🔍 getCloudDataForSync called for: $dataType');
       CollectionReference collection;
 
       switch (dataType) {
         case 'courses':
           collection = _coursesCollection;
+          print('📚 Using courses collection');
           break;
         case 'assignments':
           collection = _assignmentsCollection;
+          print('📋 Using assignments collection');
+          break;
+        case 'assessments':
+          collection = _assessmentsCollection;
+          print('📝 Using assessments collection');
           break;
         case 'grades':
           collection = _gradesCollection;
+          print('📊 Using grades collection');
           break;
         default:
           throw Exception('Invalid data type: $dataType');
@@ -592,18 +683,33 @@ class CloudDatabaseService {
 
       Query query = collection;
 
+      // Filter by date if provided (user filtering is implicit in collection path)
       if (since != null) {
+        print('⏰ Filtering by date since: $since');
         query = query.where(
           'updatedAt',
           isGreaterThan: Timestamp.fromDate(since),
         );
       }
 
+      print('🔄 Executing Firestore query for user: $_userId');
       final snapshot = await query.get();
-      return snapshot.docs
-          .map((doc) => {'id': doc.id, ...doc.data() as Map<String, dynamic>})
-          .toList();
-    } catch (e) {
+      print('✅ Query returned ${snapshot.docs.length} documents');
+
+      if (snapshot.docs.isEmpty) {
+        print('ℹ️ No documents found in $dataType collection for current user');
+      }
+
+      final results = snapshot.docs.map((doc) {
+        final data = {'id': doc.id, ...doc.data() as Map<String, dynamic>};
+        print('  📄 Document ${doc.id}: ${data.keys.join(", ")}');
+        return data;
+      }).toList();
+
+      return results;
+    } catch (e, stackTrace) {
+      print('❌ Error in getCloudDataForSync: $e');
+      print('📍 Stack trace: $stackTrace');
       throw Exception('Failed to get cloud data for sync: $e');
     }
   }
@@ -714,6 +820,75 @@ class CloudDatabaseService {
       return null;
     } catch (e) {
       throw Exception('Failed to check for conflicts: $e');
+    }
+  }
+
+  // User profile CRUD operations
+  Future<void> saveUserProfile(Map<String, dynamic> profileData) async {
+    try {
+      if (_userId.isEmpty) {
+        throw Exception('No authenticated user');
+      }
+
+      print('💾 Saving user profile to Firestore...');
+      print('👤 User ID: $_userId');
+
+      await _usersCollection.doc(_userId).set({
+        ...profileData,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      print('✅ User profile saved to Firestore');
+    } catch (e) {
+      print('❌ Failed to save user profile to Firestore: $e');
+      throw Exception('Failed to save user profile: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>?> getUserProfile() async {
+    try {
+      if (_userId.isEmpty) {
+        return null;
+      }
+
+      print('📥 Fetching user profile from Firestore...');
+      final doc = await _usersCollection.doc(_userId).get();
+
+      if (doc.exists) {
+        print('✅ User profile retrieved from Firestore');
+        final data = doc.data() as Map<String, dynamic>?;
+
+        if (data != null) {
+          // Convert Firestore Timestamp fields to ISO 8601 strings
+          final convertedData = Map<String, dynamic>.from(data);
+
+          // Convert updatedAt if it's a Timestamp
+          if (convertedData['updatedAt'] is Timestamp) {
+            convertedData['updatedAt'] =
+                (convertedData['updatedAt'] as Timestamp)
+                    .toDate()
+                    .toIso8601String();
+          }
+
+          // Convert createdAt if it's a Timestamp
+          if (convertedData['createdAt'] is Timestamp) {
+            convertedData['createdAt'] =
+                (convertedData['createdAt'] as Timestamp)
+                    .toDate()
+                    .toIso8601String();
+          }
+
+          return convertedData;
+        }
+
+        return data;
+      }
+
+      print('ℹ️ No user profile found in Firestore');
+      return null;
+    } catch (e) {
+      print('❌ Failed to get user profile from Firestore: $e');
+      return null;
     }
   }
 

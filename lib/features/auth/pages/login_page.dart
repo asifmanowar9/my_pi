@@ -14,32 +14,12 @@ class _LoginPageState extends State<LoginPage> {
   late final AuthController authController;
   late final GlobalKey<FormState> loginFormKey;
   bool _isPasswordVisible = false;
-  bool _isLoading = false;
-  String _errorMessage = '';
 
   @override
   void initState() {
     super.initState();
     authController = Get.find<AuthController>();
     loginFormKey = GlobalKey<FormState>();
-
-    // Listen to auth controller changes
-    authController.addListener(_updateState);
-  }
-
-  @override
-  void dispose() {
-    authController.removeListener(_updateState);
-    super.dispose();
-  }
-
-  void _updateState() {
-    if (mounted) {
-      setState(() {
-        _isLoading = authController.isSigningIn;
-        _errorMessage = authController.hasError ? authController.error : '';
-      });
-    }
   }
 
   Widget _buildEmailField() {
@@ -147,44 +127,48 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Widget _buildErrorDisplay() {
-    if (_errorMessage.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    return Obx(() {
+      if (authController.error.isEmpty) {
+        return const SizedBox.shrink();
+      }
 
-    return Container(
-      padding: const EdgeInsets.all(10),
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.red.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.red.shade200),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.error_outline, color: Colors.red.shade600, size: 20),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              _errorMessage,
-              style: TextStyle(color: Colors.red.shade700, fontSize: 14),
+      return Container(
+        padding: const EdgeInsets.all(10),
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: Colors.red.shade50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.red.shade200),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.red.shade600, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                authController.error,
+                style: TextStyle(color: Colors.red.shade700, fontSize: 14),
+              ),
             ),
-          ),
-        ],
-      ),
-    );
+          ],
+        ),
+      );
+    });
   }
 
   Widget _buildLoginButton() {
-    return _CustomButton(
-      onPressed: _isLoading
-          ? null
-          : () {
-              if (loginFormKey.currentState!.validate()) {
-                authController.signInWithEmailAndPassword();
-              }
-            },
-      isLoading: _isLoading,
-      child: const Text('Log In'),
+    return Obx(
+      () => _CustomButton(
+        onPressed: authController.isSigningIn
+            ? null
+            : () {
+                if (loginFormKey.currentState!.validate()) {
+                  authController.signInWithEmailAndPassword();
+                }
+              },
+        isLoading: authController.isSigningIn,
+        child: const Text('Log In'),
+      ),
     );
   }
 

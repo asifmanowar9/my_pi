@@ -399,6 +399,7 @@ Widget _buildDropdownField({
 }) {
   return DropdownButtonFormField<String>(
     value: value,
+    isExpanded: true,
     decoration: InputDecoration(
       labelText: label,
       prefixIcon: Icon(icon),

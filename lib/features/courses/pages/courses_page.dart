@@ -36,6 +36,9 @@ class CoursesPage extends StatelessWidget {
                 case 'sync_to_cloud':
                   controller.syncToCloud();
                   break;
+                case 'force_sync_all':
+                  controller.forceSyncAllToCloud();
+                  break;
                 case 'sync_from_cloud':
                   controller.syncFromCloud();
                   break;
@@ -53,6 +56,18 @@ class CoursesPage extends StatelessWidget {
                 child: ListTile(
                   leading: Icon(Icons.cloud_upload),
                   title: Text('Sync to Cloud'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'force_sync_all',
+                child: ListTile(
+                  leading: Icon(Icons.sync, color: Colors.orange),
+                  title: Text('Force Sync All'),
+                  subtitle: Text(
+                    'Sync all courses',
+                    style: TextStyle(fontSize: 11),
+                  ),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -152,7 +167,10 @@ class CoursesPage extends StatelessWidget {
                   .toList();
 
               return RefreshIndicator(
-                onRefresh: controller.loadCourses,
+                onRefresh: () async {
+                  await controller.syncFromCloud();
+                  await controller.loadCourses();
+                },
                 child: CustomScrollView(
                   slivers: [
                     // Active Courses Section

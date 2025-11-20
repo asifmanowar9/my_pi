@@ -10,6 +10,7 @@ import '../../../core/routes/app_routes.dart';
 import '../../../core/database/database_helper_clean.dart';
 import '../../courses/services/course_service.dart';
 import '../../courses/controllers/assessment_controller.dart';
+import '../../profile/controllers/edit_profile_controller.dart';
 
 class AuthController extends GetxController {
   static AuthController get instance => Get.find();
@@ -53,6 +54,12 @@ class AuthController extends GetxController {
   // Additional loading states for UI compatibility
   final RxBool _isResettingPassword = false.obs;
   bool get isResettingPassword => _isResettingPassword.value;
+
+  // Email verification states
+  final RxBool _isSendingVerification = false.obs;
+  final RxBool _isCheckingVerification = false.obs;
+  bool get isSendingVerification => _isSendingVerification.value;
+  bool get isCheckingVerification => _isCheckingVerification.value;
 
   // Terms acceptance for registration
   final RxBool _acceptTerms = false.obs;
@@ -156,9 +163,10 @@ class AuthController extends GetxController {
           '🔄 Migrating ${anonymousCourses.length} anonymous courses to user: $userId',
         );
 
-        // Update courses to associate with the authenticated user
+        // Update courses to associate with the authenticated user and mark as unsynced
         await db.update('courses', {
           'user_id': userId,
+          'is_synced': 0, // Mark as unsynced so they get uploaded to cloud
           'updated_at': DateTime.now().toIso8601String(),
         }, where: 'user_id IS NULL OR user_id = ""');
 
@@ -188,7 +196,6 @@ class AuthController extends GetxController {
       final userModel = await _authService.signInWithEmailAndPassword(
         email: emailController.text.trim(),
         password: passwordController.text,
-        requireEmailVerification: false,
       );
 
       if (userModel != null) {
@@ -225,18 +232,28 @@ class AuthController extends GetxController {
         email: emailController.text.trim(),
         password: passwordController.text,
         name: nameController.text.trim(),
-        sendEmailVerification: true,
       );
 
       if (userModel != null) {
         print('✅ Registration successful: ${userModel.email}');
+        print(
+          '✉️ Verification email sent. User must verify before accessing the app.',
+        );
 
-        // Show success message and navigate immediately
-        _showSuccessMessage('Account created successfully!');
-        _navigateAfterAuth();
+        // Show success message
+        Get.snackbar(
+          'Check Your Email',
+          'We\'ve sent a verification link to ${userModel.email}. Please verify your email to continue.',
+          backgroundColor: Colors.blue.shade700,
+          colorText: Colors.white,
+          snackPosition: SnackPosition.BOTTOM,
+          duration: const Duration(seconds: 5),
+        );
 
-        // Run background tasks without blocking navigation
-        _performBackgroundLoginTasks();
+        // Navigate to email verification page
+        Get.offAllNamed(AppRoutes.emailVerification);
+
+        // Don't perform background tasks or save to database until email is verified
       } else {
         print('❌ Registration returned null user');
         _handleError('Registration failed - please try again');
@@ -464,6 +481,77 @@ class AuthController extends GetxController {
     return null;
   }
 
+  // Email verification methods
+  Future<void> sendEmailVerification() async {
+    _isSendingVerification.value = true;
+    _clearError();
+
+    try {
+      await _authService.sendEmailVerification();
+      Get.snackbar(
+        'Verification Email Sent',
+        'Please check your email inbox and verify your email address.',
+        backgroundColor: Colors.green.shade700,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 4),
+      );
+    } catch (e) {
+      _handleError(e);
+    } finally {
+      _isSendingVerification.value = false;
+    }
+  }
+
+  Future<bool> checkEmailVerification() async {
+    _isCheckingVerification.value = true;
+    try {
+      final isVerified = await _authService.checkEmailVerification();
+      if (isVerified) {
+        _user.value = _authService.currentFirebaseUser;
+        Get.snackbar(
+          'Email Verified!',
+          'Your email has been verified successfully.',
+          backgroundColor: Colors.green.shade700,
+          colorText: Colors.white,
+          snackPosition: SnackPosition.BOTTOM,
+          duration: const Duration(seconds: 3),
+        );
+      }
+      return isVerified;
+    } catch (e) {
+      _handleError(e);
+      return false;
+    } finally {
+      _isCheckingVerification.value = false;
+    }
+  }
+
+  bool get isEmailVerified => _user.value?.emailVerified ?? false;
+
+  // Perform first-time login setup after email verification
+  Future<void> performFirstTimeLogin() async {
+    try {
+      if (_user.value != null) {
+        print('🔄 Performing first-time login setup for verified user...');
+
+        // Save user to database
+        await _saveUserToDatabase(_user.value!);
+
+        // Enable cloud backup
+        await _enableCloudBackup();
+
+        // Perform background login tasks
+        await _performBackgroundLoginTasks();
+
+        print('✅ First-time login setup completed');
+      }
+    } catch (e) {
+      print('❌ Error during first-time login setup: $e');
+      // Don't throw - allow user to proceed even if setup fails
+    }
+  }
+
   // Password reset method
   Future<void> resetPassword() async {
     if (emailController.text.isEmpty) {
@@ -616,6 +704,23 @@ class AuthController extends GetxController {
       message = 'Password is too weak.';
     } else if (message.contains('invalid-email')) {
       message = 'Invalid email address.';
+    } else if (message.contains('email-not-verified') ||
+        message.contains('Email not verified')) {
+      message = 'Please verify your email address to continue.';
+      _errorMessage.value = message;
+
+      // Navigate to verification page
+      Get.offAllNamed(AppRoutes.emailVerification);
+
+      Get.snackbar(
+        'Email Not Verified',
+        message,
+        backgroundColor: Colors.orange.shade700,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 4),
+      );
+      return; // Early return to avoid duplicate snackbar
     }
 
     _errorMessage.value = message;
@@ -792,34 +897,70 @@ class AuthController extends GetxController {
     }
   }
 
-  /// Sync unsynced data to cloud after authentication
+  /// Sync data bidirectionally: FROM cloud first (download existing data), then TO cloud (upload local changes)
   Future<void> _syncUnsyncedDataToCloud() async {
     try {
-      print('🔄 Starting sync of unsynced data to cloud...');
+      print('🔄 Starting bidirectional sync...');
 
-      // Get and sync unsynced courses
+      // STEP 1: Sync FROM cloud first to get existing data from other devices
+      print('📥 Step 1: Downloading data FROM cloud...');
+
       if (Get.isRegistered<CourseService>()) {
         final courseService = Get.find<CourseService>();
-        print('📚 CourseService found, triggering sync...');
-        await courseService.syncToCloud();
-        print('✅ Unsynced courses sync completed');
+        print('📚 CourseService found, syncing FROM cloud...');
+        await courseService.syncFromCloud();
+        print('✅ Courses downloaded from cloud');
       } else {
-        print('⚠️ CourseService not registered, skipping course sync');
+        print('⚠️ CourseService not registered, skipping course download');
       }
 
-      // Get and sync unsynced assessments
       if (Get.isRegistered<AssessmentController>()) {
         final assessmentController = Get.find<AssessmentController>();
-        print('📋 AssessmentController found, triggering sync...');
-        await assessmentController.syncUnsyncedAssessments();
-        print('✅ Unsynced assessments sync completed');
+        print('📋 AssessmentController found, syncing FROM cloud...');
+        await assessmentController.syncFromCloud();
+        print('✅ Assessments downloaded from cloud');
       } else {
         print(
-          '⚠️ AssessmentController not registered, skipping assessment sync',
+          '⚠️ AssessmentController not registered, skipping assessment download',
         );
       }
+
+      // STEP 2: Sync TO cloud to upload any local unsynced changes
+      print('📤 Step 2: Uploading local changes TO cloud...');
+
+      if (Get.isRegistered<CourseService>()) {
+        final courseService = Get.find<CourseService>();
+        print('📚 Force syncing ALL courses to cloud...');
+        await courseService.forceSyncAllToCloud();
+        print('✅ All courses force synced to cloud');
+      }
+
+      if (Get.isRegistered<AssessmentController>()) {
+        final assessmentController = Get.find<AssessmentController>();
+        print('📋 Uploading unsynced assessments to cloud...');
+        await assessmentController.syncUnsyncedAssessments();
+        print('✅ Unsynced assessments uploaded');
+      }
+
+      // STEP 3: Sync profile if there are local changes
+      try {
+        print('👤 Checking profile for sync...');
+        if (Get.isRegistered<EditProfileController>()) {
+          final editProfileController = Get.find<EditProfileController>();
+          await editProfileController.syncProfileToCloud();
+        } else {
+          // Create temporary instance for sync
+          final editProfileController = EditProfileController();
+          await editProfileController.syncProfileToCloud();
+        }
+        print('✅ Profile sync completed');
+      } catch (e) {
+        print('⚠️ Profile sync skipped: $e');
+      }
+
+      print('🎉 Bidirectional sync completed successfully');
     } catch (e) {
-      print('⚠️ Failed to sync unsynced data to cloud: $e');
+      print('⚠️ Failed to complete sync: $e');
       // Don't throw error as this is a background operation
     }
   }

@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../shared/services/storage_service.dart';
+import '../../../shared/services/cloud_database_service.dart';
 import '../../auth/controllers/auth_controller.dart';
 import 'profile_controller.dart';
 
 class EditProfileController extends GetxController {
   final AuthController _authController = Get.find<AuthController>();
   final StorageService _storageService = Get.find<StorageService>();
+  CloudDatabaseService? _cloudService;
 
   // Loading states
   final isLoading = false.obs;
@@ -82,8 +84,19 @@ class EditProfileController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    _initializeCloudService();
     _initializeControllers();
     _loadUserData();
+  }
+
+  void _initializeCloudService() {
+    try {
+      if (Get.isRegistered<CloudDatabaseService>()) {
+        _cloudService = Get.find<CloudDatabaseService>();
+      }
+    } catch (e) {
+      print('Cloud service not available: $e');
+    }
   }
 
   @override
@@ -132,8 +145,69 @@ class EditProfileController extends GetxController {
         nameController.text = user.displayName ?? '';
         emailController.text = user.email ?? '';
 
-        // Load extended profile data from local storage
-        final profileData = _storageService.getProfileData(user.uid);
+        // Load local data first
+        Map<String, dynamic>? localProfileData = _storageService.getProfileData(
+          user.uid,
+        );
+        print(
+          '📱 Local profile data: ${localProfileData != null ? "found" : "not found"}',
+        );
+
+        // Then check Firestore for updates
+        Map<String, dynamic>? profileData = localProfileData;
+        if (_cloudService != null) {
+          try {
+            print('☁️ Checking Firestore for profile updates...');
+            final cloudProfileData = await _cloudService!.getUserProfile();
+
+            if (cloudProfileData != null) {
+              // Compare timestamps to decide which version to use
+              if (localProfileData != null) {
+                final localUpdatedAt = localProfileData['updatedAt'] as String?;
+                final cloudUpdatedAt = cloudProfileData['updatedAt'] as String?;
+
+                if (localUpdatedAt != null && cloudUpdatedAt != null) {
+                  try {
+                    final localTime = DateTime.parse(localUpdatedAt);
+                    final cloudTime = DateTime.parse(cloudUpdatedAt);
+
+                    if (cloudTime.isAfter(localTime)) {
+                      print('☁️ Cloud version is newer, using cloud data');
+                      profileData = cloudProfileData;
+                      // Update local storage with newer cloud data
+                      _storageService.saveProfileData(
+                        user.uid,
+                        cloudProfileData,
+                      );
+                    } else {
+                      print('📱 Local version is up-to-date');
+                    }
+                  } catch (e) {
+                    print('⚠️ Failed to compare timestamps: $e');
+                    // If timestamp comparison fails, prefer cloud data
+                    profileData = cloudProfileData;
+                    _storageService.saveProfileData(user.uid, cloudProfileData);
+                  }
+                } else {
+                  // If no timestamp, prefer cloud data
+                  print('☁️ No timestamps found, using cloud data');
+                  profileData = cloudProfileData;
+                  _storageService.saveProfileData(user.uid, cloudProfileData);
+                }
+              } else {
+                // No local data, use cloud data
+                print('☁️ No local data, using cloud data');
+                profileData = cloudProfileData;
+                _storageService.saveProfileData(user.uid, cloudProfileData);
+              }
+            } else {
+              print('ℹ️ No cloud profile data found, using local data');
+            }
+          } catch (e) {
+            print('⚠️ Failed to load from Firestore, using local data: $e');
+          }
+        }
+
         if (profileData != null) {
           phoneController.text = profileData['phone'] ?? '';
           studentIdController.text = profileData['studentId'] ?? '';
@@ -325,6 +399,20 @@ class EditProfileController extends GetxController {
 
       // Save to local storage
       _storageService.saveProfileData(user.uid, profileData);
+      print('✅ Profile saved to local storage');
+
+      // Sync to Firestore
+      if (_cloudService != null) {
+        try {
+          await _cloudService!.saveUserProfile(profileData);
+          print('✅ Profile synced to Firestore');
+        } catch (e) {
+          print('⚠️ Failed to sync profile to Firestore: $e');
+          // Don't fail the save operation if cloud sync fails
+        }
+      } else {
+        print('ℹ️ Cloud service not available, profile saved locally only');
+      }
 
       // Update Firebase user profile if name changed
       if (nameController.text.trim() != user.displayName) {
@@ -369,6 +457,106 @@ class EditProfileController extends GetxController {
       print('Setting isSaving to false');
       isSaving.value = false;
     }
+  }
+
+  // Sync profile to cloud only if there are local changes
+  Future<void> syncProfileToCloud() async {
+    if (_cloudService == null) {
+      print('ℹ️ Cloud service not available, skipping profile sync');
+      return;
+    }
+
+    final user = currentUser;
+    if (user == null) {
+      print('⚠️ No user found, skipping profile sync');
+      return;
+    }
+
+    try {
+      print('🔄 Checking profile for cloud sync...');
+
+      // Get local profile data
+      final localProfileData = _storageService.getProfileData(user.uid);
+      if (localProfileData == null) {
+        print('ℹ️ No local profile data to sync');
+        return;
+      }
+
+      // Get cloud profile data
+      final cloudProfileData = await _cloudService!.getUserProfile();
+
+      // Check if sync is needed
+      bool needsSync = false;
+      if (cloudProfileData == null) {
+        print('☁️ No cloud profile found, will upload local data');
+        needsSync = true;
+      } else {
+        // Compare timestamps
+        final localUpdatedAt = localProfileData['updatedAt'] as String?;
+        final cloudUpdatedAt = cloudProfileData['updatedAt'] as String?;
+
+        if (localUpdatedAt != null && cloudUpdatedAt != null) {
+          try {
+            final localTime = DateTime.parse(localUpdatedAt);
+            final cloudTime = DateTime.parse(cloudUpdatedAt);
+
+            if (localTime.isAfter(cloudTime)) {
+              print('📤 Local profile is newer, syncing to cloud');
+              needsSync = true;
+            } else {
+              print('✅ Cloud profile is up-to-date, no sync needed');
+            }
+          } catch (e) {
+            print('⚠️ Failed to compare timestamps: $e');
+            needsSync = true; // Sync on error to be safe
+          }
+        } else {
+          // If no timestamps, compare data to detect changes
+          needsSync = _hasProfileChanges(localProfileData, cloudProfileData);
+        }
+      }
+
+      if (needsSync) {
+        await _cloudService!.saveUserProfile(localProfileData);
+        print('✅ Profile synced to cloud successfully');
+      }
+    } catch (e) {
+      print('⚠️ Failed to sync profile to cloud: $e');
+      // Don't throw error as this is a background operation
+    }
+  }
+
+  // Check if there are actual changes between local and cloud data
+  bool _hasProfileChanges(
+    Map<String, dynamic> local,
+    Map<String, dynamic> cloud,
+  ) {
+    final fieldsToCompare = [
+      'phone',
+      'studentId',
+      'major',
+      'year',
+      'gpa',
+      'advisor',
+      'expectedGraduation',
+      'address',
+      'emergencyContact',
+      'emergencyPhone',
+      'bio',
+      'academicYear',
+    ];
+
+    for (final field in fieldsToCompare) {
+      if (local[field] != cloud[field]) {
+        print(
+          '📝 Field "$field" has changed: "${local[field]}" != "${cloud[field]}"',
+        );
+        return true;
+      }
+    }
+
+    print('✅ No profile changes detected');
+    return false;
   }
 
   // Birth date picker method
