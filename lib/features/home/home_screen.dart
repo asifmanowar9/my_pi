@@ -262,8 +262,15 @@ class _ScheduleItem extends StatelessWidget {
     if (courseId.isEmpty) return;
 
     try {
-      // Get the course controller to find the course
-      final courseController = Get.find<CourseController>();
+      // Get or create the course controller to find the course
+      final courseController = Get.isRegistered<CourseController>()
+          ? Get.find<CourseController>()
+          : Get.put(CourseController());
+
+      // Wait for courses to load if they haven't yet
+      if (courseController.courses.isEmpty && !courseController.isLoading) {
+        await courseController.loadCourses();
+      }
 
       // Find the course by ID
       final CourseModel? course = courseController.courses.firstWhereOrNull(
@@ -285,7 +292,7 @@ class _ScheduleItem extends StatelessWidget {
       // Error finding course controller or course
       Get.snackbar(
         'Error',
-        'Unable to open course details',
+        'Unable to open course details: ${e.toString()}',
         snackPosition: SnackPosition.BOTTOM,
       );
     }

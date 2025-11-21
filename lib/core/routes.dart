@@ -8,7 +8,7 @@ import '../features/auth/pages/register_page.dart';
 import '../features/auth/pages/welcome_page.dart';
 import '../features/auth/pages/forgot_password_page.dart';
 import '../features/auth/services/auth_service.dart';
-import '../features/debug/pages/database_viewer_page.dart';
+
 import '../features/courses/pages/courses_page.dart';
 import '../features/courses/pages/course_detail_page.dart';
 import '../features/home/home_screen.dart';
@@ -141,11 +141,11 @@ class AppRoutes {
       page: () => const SettingsPage(),
       transition: Transition.rightToLeft,
     ),
-    GetPage(
-      name: Routes.DATABASE_VIEWER,
-      page: () => const DatabaseViewerPage(),
-      transition: Transition.rightToLeft,
-    ),
+    // GetPage(
+    //   name: Routes.DATABASE_VIEWER,
+    //   page: () => const DatabaseViewerPage(),
+    //   transition: Transition.rightToLeft,
+    // ),
   ];
 }
 

@@ -138,9 +138,186 @@ class CloudDatabaseService {
   // Delete course
   Future<void> deleteCourse(String courseId) async {
     try {
+      if (_userId.isEmpty) {
+        throw Exception('No authenticated user');
+      }
+
+      print(
+        '🔥 Deleting course from Firestore path: users/$_userId/courses/$courseId',
+      );
       await _coursesCollection.doc(courseId).delete();
+      print('✅ Course document deleted from Firestore');
+
+      // Also delete any duplicate documents with wrong document IDs
+      await _deleteCourseDuplicates(courseId);
     } catch (e) {
+      print('❌ Firestore delete error: $e');
       throw Exception('Failed to delete course: $e');
+    }
+  }
+
+  // Delete all duplicate documents for a course (internal helper)
+  Future<void> _deleteCourseDuplicates(String courseId) async {
+    try {
+      final snapshot = await _coursesCollection.get();
+      final docsToDelete = <String>[];
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final dataCourseId = data['id'] as String?;
+
+        // If the document contains this course ID but the document ID doesn't match,
+        // it's a duplicate that should be deleted
+        if (dataCourseId == courseId && doc.id != courseId) {
+          docsToDelete.add(doc.id);
+        }
+      }
+
+      if (docsToDelete.isEmpty) {
+        return;
+      }
+
+      print(
+        '🗑️ Deleting ${docsToDelete.length} duplicate documents for course $courseId',
+      );
+      final batch = _firestore.batch();
+      for (final docId in docsToDelete) {
+        print('   🗑️ Deleting duplicate document ID: $docId');
+        batch.delete(_coursesCollection.doc(docId));
+      }
+
+      await batch.commit();
+      print('✅ Deleted ${docsToDelete.length} duplicates');
+    } catch (e) {
+      print('⚠️ Error deleting duplicates: $e');
+      // Don't throw - deletion of main document succeeded
+    }
+  }
+
+  // Verify course deletion (debug method)
+  Future<bool> verifyCourseDeleted(String courseId) async {
+    try {
+      // Check the main document
+      final doc = await _coursesCollection.doc(courseId).get();
+      final mainExists = doc.exists;
+
+      // Check for duplicates
+      final snapshot = await _coursesCollection.get();
+      int duplicateCount = 0;
+      for (final d in snapshot.docs) {
+        final data = d.data() as Map<String, dynamic>;
+        if (data['id'] == courseId) {
+          duplicateCount++;
+          print('   ⚠️ Found document with course ID $courseId: ${d.id}');
+        }
+      }
+
+      print('🔍 Course $courseId verification:');
+      print('   - Main document exists: $mainExists');
+      print('   - Total documents with this ID: $duplicateCount');
+
+      return !mainExists && duplicateCount == 0;
+    } catch (e) {
+      print('❌ Error verifying course deletion: $e');
+      return false;
+    }
+  }
+
+  // Find duplicate courses (debug method)
+  Future<Map<String, List<String>>> findDuplicateCourses() async {
+    try {
+      final snapshot = await _coursesCollection.get();
+      final courseIdMap =
+          <String, List<String>>{}; // Maps course ID to list of document IDs
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final courseId = data['id'] as String?;
+
+        if (courseId != null) {
+          if (!courseIdMap.containsKey(courseId)) {
+            courseIdMap[courseId] = [];
+          }
+          courseIdMap[courseId]!.add(
+            doc.id,
+          ); // doc.id is the Firestore document ID
+        }
+      }
+
+      // Filter to only duplicates (course IDs that have more than one document)
+      final duplicates = <String, List<String>>{};
+      courseIdMap.forEach((courseId, docIds) {
+        if (docIds.length > 1) {
+          duplicates[courseId] = docIds;
+          print(
+            '⚠️ Course ID "$courseId" has ${docIds.length} documents: $docIds',
+          );
+        }
+      });
+
+      if (duplicates.isEmpty) {
+        print('✅ No duplicate courses found');
+      } else {
+        print('⚠️ Found ${duplicates.length} courses with duplicates');
+      }
+
+      return duplicates;
+    } catch (e) {
+      print('❌ Error finding duplicates: $e');
+      return {};
+    }
+  }
+
+  // Clean up all duplicate courses in Firestore
+  Future<int> cleanupAllDuplicateCourses() async {
+    try {
+      print('🧹 Starting cleanup of all duplicate courses...');
+      final snapshot = await _coursesCollection.get();
+      final courseIdMap = <String, List<String>>{};
+
+      // Build map of course IDs to document IDs
+      for (final doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final courseId = data['id'] as String?;
+
+        if (courseId != null) {
+          if (!courseIdMap.containsKey(courseId)) {
+            courseIdMap[courseId] = [];
+          }
+          courseIdMap[courseId]!.add(doc.id);
+        }
+      }
+
+      int totalDeleted = 0;
+      final batch = _firestore.batch();
+
+      // For each course, keep only the document where doc.id == course.id
+      courseIdMap.forEach((courseId, docIds) {
+        if (docIds.length > 1) {
+          print('🔍 Course "$courseId" has ${docIds.length} documents');
+          for (final docId in docIds) {
+            if (docId != courseId) {
+              print('   🗑️ Deleting duplicate: $docId');
+              batch.delete(_coursesCollection.doc(docId));
+              totalDeleted++;
+            } else {
+              print('   ✅ Keeping correct document: $docId');
+            }
+          }
+        }
+      });
+
+      if (totalDeleted > 0) {
+        await batch.commit();
+        print('✅ Cleanup complete. Deleted $totalDeleted duplicate documents');
+      } else {
+        print('✅ No duplicates to clean up');
+      }
+
+      return totalDeleted;
+    } catch (e) {
+      print('❌ Error during cleanup: $e');
+      throw Exception('Failed to cleanup duplicates: $e');
     }
   }
 
@@ -351,9 +528,48 @@ class CloudDatabaseService {
   // Delete assessment
   Future<void> deleteAssessment(String assessmentId) async {
     try {
+      if (_userId.isEmpty) {
+        throw Exception('No authenticated user');
+      }
+
+      print(
+        '🔥 Deleting assessment from Firestore path: users/$_userId/assessments/$assessmentId',
+      );
       await _assessmentsCollection.doc(assessmentId).delete();
+      print('✅ Assessment document deleted from Firestore');
     } catch (e) {
+      print('❌ Firestore delete error: $e');
       throw Exception('Failed to delete assessment: $e');
+    }
+  }
+
+  // Delete all assessments for a course (cascade delete)
+  Future<void> deleteAssessmentsForCourse(String courseId) async {
+    try {
+      if (_userId.isEmpty) {
+        throw Exception('No authenticated user');
+      }
+
+      print('🔥 Deleting all assessments for course: $courseId');
+
+      // Query all assessments for this course
+      final assessmentsSnapshot = await _assessmentsCollection
+          .where('course_id', isEqualTo: courseId)
+          .get();
+
+      // Delete each assessment
+      final batch = _firestore.batch();
+      for (final doc in assessmentsSnapshot.docs) {
+        batch.delete(doc.reference);
+      }
+
+      await batch.commit();
+      print(
+        '✅ Deleted ${assessmentsSnapshot.docs.length} assessments for course $courseId',
+      );
+    } catch (e) {
+      print('❌ Failed to delete assessments for course: $e');
+      throw Exception('Failed to delete assessments for course: $e');
     }
   }
 

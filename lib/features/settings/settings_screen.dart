@@ -106,72 +106,72 @@ class _NotificationSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Notifications', style: AppTextStyles.cardTitle),
-            const SizedBox(height: 16),
-            // _NotificationTile(
-            //   icon: Icons.assignment,
-            //   title: 'Assignment Reminders',
-            //   subtitle: 'Get notified about upcoming assignments',
-            //   value: true,
-            //   onChanged: (value) {
-            //     // TODO: Implement notification setting
-            //   },
-            // ),
-            // _NotificationTile(
-            //   icon: Icons.grade,
-            //   title: 'Grade Updates',
-            //   subtitle: 'Get notified when grades are posted',
-            //   value: true,
-            //   onChanged: (value) {
-            //     // TODO: Implement notification setting
-            //   },
-            // ),
-            // _NotificationTile(
-            //   icon: Icons.schedule,
-            //   title: 'Class Reminders',
-            //   subtitle: 'Get notified before classes start',
-            //   value: false,
-            //   onChanged: (value) {
-            //     // TODO: Implement notification setting
-            //   },
-            // ),
-            // ListTile(
-            //   contentPadding: EdgeInsets.zero,
-            //   leading: Icon(Icons.tune, color: Get.theme.colorScheme.primary),
-            //   title: Text(
-            //     'Advanced Notification Settings',
-            //     style: AppTextStyles.cardSubtitle,
-            //   ),
-            //   subtitle: Text(
-            //     'Customize notification timing and frequency',
-            //     style: AppTextStyles.caption,
-            //   ),
-            //   trailing: const Icon(Icons.chevron_right),
-            //   onTap: () => Get.toNamed('/profile/notifications'),
-            // ),
-            // const Divider(),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.bug_report, color: Colors.orange),
-              title: Text(
-                'Notification Debugger',
-                style: AppTextStyles.cardSubtitle,
-              ),
-              subtitle: Text(
-                'Test and troubleshoot notifications',
-                style: AppTextStyles.caption,
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Get.toNamed('/debug/notifications'),
-            ),
-          ],
-        ),
-      ),
+      // child: Padding(
+      //   padding: const EdgeInsets.all(16),
+      //   // child: Column(
+      //   //   crossAxisAlignment: CrossAxisAlignment.start,
+      //   //   children: [
+      //   //     // Text('Notifications', style: AppTextStyles.cardTitle),
+      //   //     // const SizedBox(height: 16),
+      //   //     // _NotificationTile(
+      //   //     //   icon: Icons.assignment,
+      //   //     //   title: 'Assignment Reminders',
+      //   //     //   subtitle: 'Get notified about upcoming assignments',
+      //   //     //   value: true,
+      //   //     //   onChanged: (value) {
+      //   //     //     // TODO: Implement notification setting
+      //   //     //   },
+      //   //     // ),
+      //   //     // _NotificationTile(
+      //   //     //   icon: Icons.grade,
+      //   //     //   title: 'Grade Updates',
+      //   //     //   subtitle: 'Get notified when grades are posted',
+      //   //     //   value: true,
+      //   //     //   onChanged: (value) {
+      //   //     //     // TODO: Implement notification setting
+      //   //     //   },
+      //   //     // ),
+      //   //     // _NotificationTile(
+      //   //     //   icon: Icons.schedule,
+      //   //     //   title: 'Class Reminders',
+      //   //     //   subtitle: 'Get notified before classes start',
+      //   //     //   value: false,
+      //   //     //   onChanged: (value) {
+      //   //     //     // TODO: Implement notification setting
+      //   //     //   },
+      //   //     // ),
+      //   //     // ListTile(
+      //   //     //   contentPadding: EdgeInsets.zero,
+      //   //     //   leading: Icon(Icons.tune, color: Get.theme.colorScheme.primary),
+      //   //     //   title: Text(
+      //   //     //     'Advanced Notification Settings',
+      //   //     //     style: AppTextStyles.cardSubtitle,
+      //   //     //   ),
+      //   //     //   subtitle: Text(
+      //   //     //     'Customize notification timing and frequency',
+      //   //     //     style: AppTextStyles.caption,
+      //   //     //   ),
+      //   //     //   trailing: const Icon(Icons.chevron_right),
+      //   //     //   onTap: () => Get.toNamed('/profile/notifications'),
+      //   //     // ),
+      //   //     // const Divider(),
+      //   //     // ListTile(
+      //   //     //   contentPadding: EdgeInsets.zero,
+      //   //     //   leading: Icon(Icons.bug_report, color: Colors.orange),
+      //   //     //   title: Text(
+      //   //     //     'Notification Debugger',
+      //   //     //     style: AppTextStyles.cardSubtitle,
+      //   //     //   ),
+      //   //     //   subtitle: Text(
+      //   //     //     'Test and troubleshoot notifications',
+      //   //     //     style: AppTextStyles.caption,
+      //   //     //   ),
+      //   //     //   trailing: const Icon(Icons.chevron_right),
+      //   //     //   onTap: () => Get.toNamed('/debug/notifications'),
+      //   //     // ),
+      //   //   ],
+      //   // ),
+      // ),
     );
   }
 }
@@ -287,28 +287,28 @@ class _AboutSection extends StatelessWidget {
               contentPadding: EdgeInsets.zero,
               leading: Icon(Icons.info, color: Get.theme.colorScheme.primary),
               title: Text('App Version', style: AppTextStyles.cardSubtitle),
-              subtitle: Text('1.0.0 (Build 1)', style: AppTextStyles.caption),
+              subtitle: Text('1.0.1 (Build 1.1)', style: AppTextStyles.caption),
             ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.update, color: Get.theme.colorScheme.primary),
-              title: Text(
-                'Check for Updates',
-                style: AppTextStyles.cardSubtitle,
-              ),
-              subtitle: Text(
-                'You are using the latest version',
-                style: AppTextStyles.caption,
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                Get.snackbar(
-                  'Up to Date',
-                  'You are using the latest version of My Pi',
-                  snackPosition: SnackPosition.BOTTOM,
-                );
-              },
-            ),
+            // ListTile(
+            //   contentPadding: EdgeInsets.zero,
+            //   leading: Icon(Icons.update, color: Get.theme.colorScheme.primary),
+            //   title: Text(
+            //     'Check for Updates',
+            //     style: AppTextStyles.cardSubtitle,
+            //   ),
+            //   subtitle: Text(
+            //     'You are using the latest version',
+            //     style: AppTextStyles.caption,
+            //   ),
+            //   trailing: const Icon(Icons.chevron_right),
+            //   onTap: () {
+            //     Get.snackbar(
+            //       'Up to Date',
+            //       'You are using the latest version of My Pi',
+            //       snackPosition: SnackPosition.BOTTOM,
+            //     );
+            //   },
+            // ),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: Icon(Icons.help, color: Get.theme.colorScheme.primary),

@@ -80,6 +80,18 @@ class CoursesPage extends StatelessWidget {
                 ),
               ),
               const PopupMenuItem(
+                value: 'debug_firestore',
+                child: ListTile(
+                  leading: Icon(Icons.bug_report, color: Colors.red),
+                  title: Text('Debug & Cleanup Firestore'),
+                  subtitle: Text(
+                    'Remove duplicates',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              const PopupMenuItem(
                 value: 'sync_settings',
                 child: ListTile(
                   leading: Icon(Icons.sync_alt),

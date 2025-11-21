@@ -208,21 +208,41 @@ class CourseService extends GetxService {
       final db = await _databaseHelper.database;
       final userId = _currentUserId;
 
+      print('🗑️ Deleting course from local database: $id');
+
+      // First, delete all assessments for this course from local database
+      print('🗑️ Deleting assessments for course: $id');
+      await db.delete('assessments', where: 'course_id = ?', whereArgs: [id]);
+      print('✅ Assessments deleted from local database');
+
+      // Then delete the course itself
       await db.delete(
         'courses',
         where: userId.isNotEmpty ? 'id = ? AND user_id = ?' : 'id = ?',
         whereArgs: userId.isNotEmpty ? [id, userId] : [id],
       );
+      print('✅ Course deleted from local database');
 
-      // Optional cloud deletion for authenticated users
+      // Cloud deletion for authenticated users
       if (_safeAuthController?.isAuthenticated == true &&
           _cloudService != null) {
         try {
+          print('☁️ Deleting course and assessments from Firestore: $id');
+
+          // Delete all assessments for this course from Firestore
+          await _cloudService!.deleteAssessmentsForCourse(id);
+
+          // Delete the course from Firestore
           await _cloudService!.deleteCourse(id);
+          print('✅ Course and assessments deleted from Firestore');
         } catch (e) {
-          print('Cloud deletion failed: $e');
-          // Continue without cloud deletion
+          print('❌ Failed to delete course from Firestore: $e');
+          // Continue - local deletion succeeded
         }
+      } else {
+        print(
+          'ℹ️ Skipping cloud deletion (not authenticated or no cloud service)',
+        );
       }
     } catch (e) {
       throw Exception('Failed to delete course: $e');
@@ -837,7 +857,56 @@ class CourseService extends GetxService {
     converted.remove('createdAt');
     converted.remove('updatedAt');
     converted.remove('syncStatus');
+    converted.remove('userId'); // Courses table uses user_id not userId
 
     return converted;
+  }
+
+  /// Debug method to check Firestore state and clean up duplicates
+  Future<void> debugCheckFirestoreState() async {
+    if (_safeAuthController?.isAuthenticated != true || _cloudService == null) {
+      print('❌ Not authenticated or no cloud service');
+      return;
+    }
+
+    try {
+      print('🔍 Checking for duplicate courses...');
+      final duplicates = await _cloudService!.findDuplicateCourses();
+
+      if (duplicates.isEmpty) {
+        print('✅ No duplicate course IDs found');
+      } else {
+        print('⚠️ Found ${duplicates.length} courses with duplicates');
+
+        // Ask to clean up
+        print('🧹 Cleaning up duplicates...');
+        final deleted = await _cloudService!.cleanupAllDuplicateCourses();
+        print('✅ Cleanup complete: deleted $deleted duplicate documents');
+      }
+
+      print('\n🔍 Fetching all courses from Firestore...');
+      final cloudCourses = await _cloudService!.getCloudDataForSync('courses');
+      print('📦 Found ${cloudCourses.length} courses in Firestore');
+
+      final uniqueCourses = <String>{};
+      for (var i = 0; i < cloudCourses.length; i++) {
+        final course = cloudCourses[i];
+        final courseId = course['id'];
+        if (uniqueCourses.contains(courseId)) {
+          print('⚠️ Duplicate: $courseId - ${course['name']}');
+        } else {
+          uniqueCourses.add(courseId);
+          print('  ${i + 1}. $courseId - ${course['name']}');
+        }
+      }
+
+      print('\n📊 Summary:');
+      print('   Total documents: ${cloudCourses.length}');
+      print('   Unique courses: ${uniqueCourses.length}');
+      print('   Duplicates: ${cloudCourses.length - uniqueCourses.length}');
+    } catch (e) {
+      print('❌ Debug check failed: $e');
+      rethrow;
+    }
   }
 }

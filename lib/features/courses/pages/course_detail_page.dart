@@ -1345,12 +1345,16 @@ class CourseDetailPage extends StatelessWidget {
               Get.back(); // Close dialog
               final success = await controller.deleteCourse(course.id);
               if (success) {
-                // Schedule navigation after the current frame to avoid snackbar conflicts
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (Get.isRegistered<CourseController>()) {
-                    Get.offAndToNamed('/courses'); // Go to courses page
+                // Navigate back to courses page
+                // Use Get.back() to pop this detail page
+                try {
+                  Get.back();
+                } catch (e) {
+                  // If Get.back() fails, try Navigator.pop
+                  if (Navigator.canPop(Get.context!)) {
+                    Navigator.pop(Get.context!);
                   }
-                });
+                }
               }
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),

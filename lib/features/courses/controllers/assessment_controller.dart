@@ -254,22 +254,33 @@ class AssessmentController extends GetxController {
   // Delete assessment
   Future<bool> deleteAssessment(String assessmentId) async {
     try {
+      print('🗑️ Deleting assessment: $assessmentId');
+
+      // Cancel notification
       await _notificationService.cancelNotification(assessmentId.hashCode);
 
       // Delete from local database
+      print('🗑️ Deleting assessment from local database');
       await _dbHelper.deleteAssessment(assessmentId);
+      print('✅ Assessment deleted from local database');
 
-      // Optional cloud deletion for authenticated users
+      // Cloud deletion for authenticated users
       if (_isAuthenticated && _cloudService != null) {
         try {
+          print('☁️ Deleting assessment from Firestore: $assessmentId');
           await _cloudService!.deleteAssessment(assessmentId);
-          print('✅ Assessment deleted from Firebase: $assessmentId');
+          print('✅ Assessment deleted from Firestore');
         } catch (e) {
-          print('❌ Failed to delete assessment from Firebase: $e');
-          // Continue without cloud deletion
+          print('❌ Failed to delete assessment from Firestore: $e');
+          // Continue - local deletion succeeded
         }
+      } else {
+        print(
+          'ℹ️ Skipping cloud deletion (not authenticated or no cloud service)',
+        );
       }
 
+      // Remove from in-memory list
       assessments.removeWhere((a) => a.id == assessmentId);
 
       Get.snackbar(
