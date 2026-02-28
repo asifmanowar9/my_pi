@@ -50,3 +50,15 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase configuration files - NEVER commit these!
+**/google-services.json
+**/GoogleService-Info.plist
+**/.firebaserc
+**/firebase-debug.log
+**/firebase-debug.*.log
+
+# API Keys and sensitive configuration
+**/*config.json
+**/*secrets.json
+**/apikeys.properties
