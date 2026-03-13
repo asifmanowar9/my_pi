@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
 import '../models/course_grade_model.dart';
-import '../../../core/database/database_helper_clean.dart';
+import '../../../core/database/database_helper.dart';
 
 class CourseGradeManager extends StatefulWidget {
   final String courseId;

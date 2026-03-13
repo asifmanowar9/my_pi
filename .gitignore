@@ -62,3 +62,9 @@ app.*.map.json
 **/*config.json
 **/*secrets.json
 **/apikeys.properties
+
+# Vercel
+.vercel/
+
+# Optional local Flutter SDK folder (if used for CI/deploy scripts)
+flutter/

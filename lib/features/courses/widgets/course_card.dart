@@ -4,7 +4,7 @@ import '../models/course_model.dart';
 import '../models/course_grade_model.dart';
 import '../controllers/course_controller.dart';
 import '../pages/edit_course_page.dart';
-import '../../../core/database/database_helper_clean.dart';
+import '../../../core/database/database_helper.dart';
 
 class CourseCard extends StatelessWidget {
   final CourseModel course;

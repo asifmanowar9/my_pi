@@ -3,16 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:path_provider/path_provider.dart';
-import 'dart:io';
 import '../../courses/models/course_model.dart';
-import '../../courses/models/course_grade_model.dart';
 import '../../courses/controllers/course_controller.dart';
 import '../../courses/controllers/assessment_controller.dart';
 import '../../courses/services/grade_calculation_service.dart';
 import '../../auth/controllers/auth_controller.dart';
-import '../../../core/database/database_helper_clean.dart'
-    as DatabaseHelperClean;
 
 class TranscriptController extends GetxController {
   final RxList<String> selectedCourses = <String>[].obs;

@@ -7,7 +7,7 @@ import 'dart:convert';
 import '../services/auth_service.dart';
 import '../exceptions/auth_exceptions.dart';
 import '../../../core/routes/app_routes.dart';
-import '../../../core/database/database_helper_clean.dart';
+import '../../../core/database/database_helper.dart';
 import '../../courses/services/course_service.dart';
 import '../../courses/controllers/assessment_controller.dart';
 import '../../profile/controllers/edit_profile_controller.dart';
@@ -150,37 +150,7 @@ class AuthController extends GetxController {
   Future<void> _migrateAnonymousDataToUser(String userId) async {
     try {
       final dbHelper = DatabaseHelper();
-      final db = await dbHelper.database;
-
-      // Check if there are any courses without user_id (anonymous data)
-      final anonymousCourses = await db.query(
-        'courses',
-        where: 'user_id IS NULL OR user_id = ""',
-      );
-
-      if (anonymousCourses.isNotEmpty) {
-        print(
-          '🔄 Migrating ${anonymousCourses.length} anonymous courses to user: $userId',
-        );
-
-        // Update courses to associate with the authenticated user and mark as unsynced
-        await db.update('courses', {
-          'user_id': userId,
-          'is_synced': 0, // Mark as unsynced so they get uploaded to cloud
-          'updated_at': DateTime.now().toIso8601String(),
-        }, where: 'user_id IS NULL OR user_id = ""');
-
-        // Also migrate any associated assignments and assessments
-        for (final course in anonymousCourses) {
-          // Note: assignments and assessments are linked by course_id,
-          // so they automatically become associated with the user through the course
-          print('  ✅ Migrated course: ${course['name']} (${course['id']})');
-        }
-
-        print('✅ Anonymous data migration completed');
-      } else {
-        print('ℹ️ No anonymous data to migrate');
-      }
+      await dbHelper.migrateAnonymousDataToUser(userId);
     } catch (e) {
       print('❌ Error migrating anonymous data: $e');
       // Don't throw - this is not critical, user can still use the app

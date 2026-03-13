@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:get/get.dart';
 
-import '../../../core/database/database_helper_clean.dart';
+import '../../../core/database/database_helper.dart';
 import '../../../shared/services/cloud_database_service.dart';
 import '../../../features/auth/controllers/auth_controller.dart';
 import '../models/course_model.dart';

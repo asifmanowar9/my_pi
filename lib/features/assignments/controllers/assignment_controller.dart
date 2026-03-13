@@ -1,5 +1,5 @@
 import 'package:get/get.dart';
-import '../../../core/database/database_helper_clean.dart';
+import '../../../core/database/database_helper.dart';
 import '../../../shared/models/assignment.dart';
 
 class AssignmentController extends GetxController {

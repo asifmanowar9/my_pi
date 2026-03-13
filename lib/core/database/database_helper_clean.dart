@@ -976,6 +976,42 @@ class DatabaseHelper {
     }
   }
 
+  // Migrate anonymous (no user_id) courses/data to an authenticated user.
+  // Called from AuthController after sign-in; runs entirely inside the DB layer
+  // so no external code needs to touch the raw Database object.
+  Future<void> migrateAnonymousDataToUser(String userId) async {
+    try {
+      final db = await database;
+
+      final anonymousCourses = await db.query(
+        'courses',
+        where: 'user_id IS NULL OR user_id = ""',
+      );
+
+      if (anonymousCourses.isNotEmpty) {
+        print(
+          '🔄 Migrating ${anonymousCourses.length} anonymous courses to user: $userId',
+        );
+
+        await db.update('courses', {
+          'user_id': userId,
+          'is_synced': 0,
+          'updated_at': DateTime.now().toIso8601String(),
+        }, where: 'user_id IS NULL OR user_id = ""');
+
+        for (final course in anonymousCourses) {
+          print('  ✅ Migrated course: ${course['name']} (${course['id']})');
+        }
+
+        print('✅ Anonymous data migration completed');
+      } else {
+        print('ℹ️ No anonymous data to migrate');
+      }
+    } catch (e) {
+      print('❌ Error migrating anonymous data: $e');
+    }
+  }
+
   Future<void> close() async {
     if (_database != null) {
       await _database!.close();

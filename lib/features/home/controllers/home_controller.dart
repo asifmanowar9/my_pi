@@ -1,5 +1,5 @@
 import 'package:get/get.dart';
-import '../../../core/database/database_helper_clean.dart';
+import '../../../core/database/database_helper.dart';
 import '../../../features/auth/controllers/auth_controller.dart';
 import '../../../shared/models/assignment.dart';
 import '../../courses/controllers/assessment_controller.dart';

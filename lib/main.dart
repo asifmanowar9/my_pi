@@ -11,7 +11,7 @@ import 'shared/services/firebase_service.dart';
 import 'shared/services/notification_service.dart';
 import 'shared/services/storage_service.dart';
 import 'shared/services/cloud_database_service.dart';
-import 'core/database/database_helper_clean.dart' as DatabaseHelperClean;
+import 'core/database/database_helper.dart' as DatabaseHelperClean;
 import 'features/auth/services/auth_service.dart';
 import 'features/auth/controllers/auth_controller.dart';
 import 'features/courses/services/course_service.dart';
