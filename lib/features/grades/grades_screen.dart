@@ -231,6 +231,8 @@ class _CourseGrades extends StatelessWidget {
   final CourseController courseController;
   final AssessmentController assessmentController;
 
+  static final RxBool _isCompletedExpanded = false.obs;
+
   const _CourseGrades({
     required this.courseController,
     required this.assessmentController,
@@ -278,10 +280,18 @@ class _CourseGrades extends StatelessWidget {
             percentage: percentage,
             credits: 3, // Default credit hours, could be made configurable
             assignments: gradedAssessments,
+            isCompletedCourse: course.isCompleted,
           );
         })
         .whereType<GradeData>()
         .toList(); // Filter out null values
+
+    final activeGrades = grades
+        .where((g) => !g.isCompletedCourse)
+        .toList(growable: false);
+    final completedGrades = grades
+        .where((g) => g.isCompletedCourse)
+        .toList(growable: false);
 
     if (grades.isEmpty) {
       return Center(
@@ -313,14 +323,78 @@ class _CourseGrades extends StatelessWidget {
         ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: grades.length,
+          itemCount: activeGrades.length,
           itemBuilder: (context, index) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: _GradeCard(grade: grades[index]),
+              child: _GradeCard(grade: activeGrades[index]),
             );
           },
         ),
+        if (completedGrades.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Obx(
+            () => Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: InkWell(
+                onTap: () => _isCompletedExpanded.toggle(),
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.check_circle,
+                        color: Colors.blue.shade600,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Completed Course Grades (${completedGrades.length})',
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue.shade600,
+                              ),
+                        ),
+                      ),
+                      Icon(
+                        _isCompletedExpanded.value
+                            ? Icons.keyboard_arrow_up
+                            : Icons.keyboard_arrow_down,
+                        color: Colors.blue.shade600,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Obx(() {
+            if (!_isCompletedExpanded.value) {
+              return const SizedBox.shrink();
+            }
+
+            return ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: completedGrades.length,
+              itemBuilder: (context, index) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _GradeCard(
+                    grade: completedGrades[index],
+                    isCompletedCourse: true,
+                  ),
+                );
+              },
+            );
+          }),
+        ],
       ],
     );
   }
@@ -328,14 +402,26 @@ class _CourseGrades extends StatelessWidget {
 
 class _GradeCard extends StatelessWidget {
   final GradeData grade;
+  final bool isCompletedCourse;
 
-  const _GradeCard({required this.grade});
+  const _GradeCard({required this.grade, this.isCompletedCourse = false});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final gradeColor = AppColors.getGradeColor(grade.currentGrade);
 
     return Card(
+      color: isCompletedCourse ? theme.colorScheme.surfaceContainerLow : null,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: isCompletedCourse
+            ? BorderSide(
+                color: theme.colorScheme.primary.withOpacity(0.25),
+                width: 1.2,
+              )
+            : BorderSide.none,
+      ),
       child: ExpansionTile(
         tilePadding: const EdgeInsets.all(16),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -440,6 +526,7 @@ class GradeData {
   final double percentage;
   final int credits;
   final List<AssignmentGrade> assignments;
+  final bool isCompletedCourse;
 
   GradeData({
     required this.courseId,
@@ -449,6 +536,7 @@ class GradeData {
     required this.percentage,
     required this.credits,
     required this.assignments,
+    required this.isCompletedCourse,
   });
 }
 

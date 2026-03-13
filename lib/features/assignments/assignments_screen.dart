@@ -12,6 +12,8 @@ import 'package:intl/intl.dart';
 class AssignmentsScreen extends StatelessWidget {
   const AssignmentsScreen({super.key});
 
+  static final RxBool _isCompletedExpanded = false.obs;
+
   @override
   Widget build(BuildContext context) {
     // Initialize controllers
@@ -76,6 +78,25 @@ class AssignmentsScreen extends StatelessWidget {
           assessmentsByCourse[assessment.courseId]!.add(assessment);
         }
 
+        // Split grouped assessments based on course completion status
+        final Map<String, List<AssessmentModel>> activeAssessmentsByCourse = {};
+        final Map<String, List<AssessmentModel>> completedAssessmentsByCourse =
+            {};
+
+        for (final entry in assessmentsByCourse.entries) {
+          final courseId = entry.key;
+          final courseAssessments = entry.value;
+          final course = courseController.courses.firstWhereOrNull(
+            (c) => c.id == courseId,
+          );
+
+          if (course?.isCompleted == true) {
+            completedAssessmentsByCourse[courseId] = courseAssessments;
+          } else {
+            activeAssessmentsByCourse[courseId] = courseAssessments;
+          }
+        }
+
         return Column(
           children: [
             // Show guest mode banner if not authenticated
@@ -89,20 +110,95 @@ class AssignmentsScreen extends StatelessWidget {
                 child: ListView(
                   padding: const EdgeInsets.all(16),
                   physics: const AlwaysScrollableScrollPhysics(),
-                  children: assessmentsByCourse.entries.map((entry) {
-                    final courseId = entry.key;
-                    final courseAssessments = entry.value;
-                    final course = courseController.courses.firstWhereOrNull(
-                      (c) => c.id == courseId,
-                    );
+                  children: [
+                    ...activeAssessmentsByCourse.entries.map((entry) {
+                      final courseId = entry.key;
+                      final courseAssessments = entry.value;
+                      final course = courseController.courses.firstWhereOrNull(
+                        (c) => c.id == courseId,
+                      );
 
-                    return _CourseAssessmentsSection(
-                      courseId: courseId,
-                      courseName: course?.name ?? 'Unknown Course',
-                      assessments: courseAssessments,
-                      assessmentController: assessmentController,
-                    );
-                  }).toList(),
+                      return _CourseAssessmentsSection(
+                        courseId: courseId,
+                        courseName: course?.name ?? 'Unknown Course',
+                        assessments: courseAssessments,
+                        assessmentController: assessmentController,
+                      );
+                    }),
+                    if (completedAssessmentsByCourse.isNotEmpty) ...[
+                      Obx(
+                        () => Card(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          elevation: 1,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: InkWell(
+                            onTap: () => _isCompletedExpanded.toggle(),
+                            borderRadius: BorderRadius.circular(12),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.check_circle,
+                                    color: Colors.blue.shade600,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Completed Course Assessments (${completedAssessmentsByCourse.length})',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.blue.shade600,
+                                          ),
+                                    ),
+                                  ),
+                                  Icon(
+                                    _isCompletedExpanded.value
+                                        ? Icons.keyboard_arrow_up
+                                        : Icons.keyboard_arrow_down,
+                                    color: Colors.blue.shade600,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Obx(() {
+                        if (!_isCompletedExpanded.value) {
+                          return const SizedBox.shrink();
+                        }
+
+                        return Column(
+                          children: completedAssessmentsByCourse.entries.map((
+                            entry,
+                          ) {
+                            final courseId = entry.key;
+                            final courseAssessments = entry.value;
+                            final course = courseController.courses
+                                .firstWhereOrNull((c) => c.id == courseId);
+
+                            return _CourseAssessmentsSection(
+                              courseId: courseId,
+                              courseName: course?.name ?? 'Unknown Course',
+                              assessments: courseAssessments,
+                              assessmentController: assessmentController,
+                              isCompletedCourse: true,
+                            );
+                          }).toList(),
+                        );
+                      }),
+                    ],
+                  ],
                 ),
               ),
             ),
@@ -118,22 +214,34 @@ class _CourseAssessmentsSection extends StatelessWidget {
   final String courseName;
   final List<AssessmentModel> assessments;
   final AssessmentController assessmentController;
+  final bool isCompletedCourse;
 
   const _CourseAssessmentsSection({
     required this.courseId,
     required this.courseName,
     required this.assessments,
     required this.assessmentController,
+    this.isCompletedCourse = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final completedHeaderBackground = theme.colorScheme.secondaryContainer;
+    final completedHeaderForeground = theme.colorScheme.onSecondaryContainer;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: isCompletedCourse
+            ? BorderSide(
+                color: theme.colorScheme.primary.withOpacity(0.25),
+                width: 1.2,
+              )
+            : BorderSide.none,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -141,7 +249,9 @@ class _CourseAssessmentsSection extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: theme.colorScheme.primaryContainer,
+              color: isCompletedCourse
+                  ? completedHeaderBackground
+                  : theme.colorScheme.primaryContainer,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(16),
                 topRight: Radius.circular(16),
@@ -149,14 +259,21 @@ class _CourseAssessmentsSection extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(Icons.school, color: theme.colorScheme.onPrimaryContainer),
+                Icon(
+                  Icons.school,
+                  color: isCompletedCourse
+                      ? completedHeaderForeground
+                      : theme.colorScheme.onPrimaryContainer,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     courseName,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onPrimaryContainer,
+                      color: isCompletedCourse
+                          ? completedHeaderForeground
+                          : theme.colorScheme.onPrimaryContainer,
                     ),
                   ),
                 ),
@@ -193,7 +310,9 @@ class _CourseAssessmentsSection extends StatelessWidget {
                     }
                   },
                   tooltip: 'Add Assessment',
-                  color: theme.colorScheme.onPrimaryContainer,
+                  color: isCompletedCourse
+                      ? completedHeaderForeground
+                      : theme.colorScheme.onPrimaryContainer,
                 ),
               ],
             ),
